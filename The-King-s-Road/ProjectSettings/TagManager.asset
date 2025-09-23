@@ -2,8 +2,11 @@
 %TAG !u! tag:unity3d.com,2011:
 --- !u!78 &1
 TagManager:
-  serializedVersion: 2
-  tags: []
+  serializedVersion: 3
+  tags:
+  - TownHall
+  - Unit
+  - SideCollider
   layers:
   - Default
   - TransparentFX
@@ -41,3 +44,17 @@ TagManager:
   - name: Default
     uniqueID: 0
     locked: 0
+  - name: Background
+    uniqueID: 83707097
+    locked: 0
+  - name: Buildings
+    uniqueID: 812280505
+    locked: 0
+  - name: Units
+    uniqueID: 3284027727
+    locked: 0
+  - name: Foreground
+    uniqueID: 277226909
+    locked: 0
+  m_RenderingLayers:
+  - Default
