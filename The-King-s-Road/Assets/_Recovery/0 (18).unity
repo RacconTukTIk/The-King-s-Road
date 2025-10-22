@@ -207,9 +207,8 @@ GameObject:
   m_Component:
   - component: {fileID: 271545562}
   - component: {fileID: 271545561}
-  - component: {fileID: 271545563}
   m_Layer: 0
-  m_Name: Storage
+  m_Name: Top-Down Simple Summer_Prop - Windmill_0
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -282,25 +281,12 @@ Transform:
   m_GameObject: {fileID: 271545560}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 11.711749, y: 5.62011, z: 0}
+  m_LocalPosition: {x: 16.369991, y: 6.807506, z: 0}
   m_LocalScale: {x: 0.9021, y: 0.9021, z: 0.9021}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &271545563
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 271545560}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0d49fe49ee9f6214aa762eb4611d2901, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Storage
-  planks: 10
 --- !u!1 &756653312
 GameObject:
   m_ObjectHideFlags: 0
@@ -311,9 +297,8 @@ GameObject:
   m_Component:
   - component: {fileID: 756653314}
   - component: {fileID: 756653313}
-  - component: {fileID: 756653315}
   m_Layer: 0
-  m_Name: Tavern
+  m_Name: Top-Down Simple Summer_Prop - House
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -386,34 +371,12 @@ Transform:
   m_GameObject: {fileID: 756653312}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -12.858645, y: 4.9421477, z: 0}
+  m_LocalPosition: {x: -16.923195, y: 6.357889, z: 0}
   m_LocalScale: {x: 0.5072, y: 0.5072, z: 0.5072}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &756653315
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 756653312}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 644b89299b0116c409c4e13c90431010, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ConstructionSite
-  requiredPlanks: 4
-  deliveredPlanks: 0
-  isComplete: 0
-  constructionSprites:
-  - {fileID: -6859179117126450918, guid: a5ea7cdd07b2fac4fa9383fd8bde3614, type: 3}
-  - {fileID: 1289524132503397116, guid: 2003fa6f4a8ba96478e78d796e153757, type: 3}
-  - {fileID: -1098292770808085640, guid: 32699bb95206bb04e9d8172b466997ba, type: 3}
-  - {fileID: 21300000, guid: f6a885b64589af14a81d5d8e054478c7, type: 3}
-  buildEffect: {fileID: 0}
-  completeEffect: {fileID: 0}
 --- !u!1 &849203449
 GameObject:
   m_ObjectHideFlags: 0
