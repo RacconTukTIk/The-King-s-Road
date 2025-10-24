@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections;
 
 public class ConstructionSite : MonoBehaviour
 {
@@ -7,12 +8,16 @@ public class ConstructionSite : MonoBehaviour
     public bool isComplete = false;
 
     [Header("Construction Sprites")]
-    public Sprite[] constructionSprites; // 4 спрайта дл€ разных стадий строительства
+    public Sprite[] constructionSprites; // 5 спрайтов дл€ разных стадий строительства
     private SpriteRenderer spriteRenderer;
 
     [Header("Construction Effects")]
     public ParticleSystem buildEffect;
     public ParticleSystem completeEffect;
+
+    [Header("Position Settings")]
+    public Vector3[] spriteOffsets; // —мещени€ дл€ каждого спрайта (если нужно)
+    public bool useCustomOffsets = false;
 
     void Start()
     {
@@ -20,6 +25,13 @@ public class ConstructionSite : MonoBehaviour
         if (spriteRenderer == null)
         {
             spriteRenderer = gameObject.AddComponent<SpriteRenderer>();
+        }
+
+        // ѕровер€ем массив смещений
+        if (useCustomOffsets && (spriteOffsets == null || spriteOffsets.Length != 5))
+        {
+            Debug.LogWarning("Ќе настроены смещени€ дл€ спрайтов! ќтключаем useCustomOffsets.");
+            useCustomOffsets = false;
         }
 
         // ”станавливаем начальный спрайт (первую стадию)
@@ -53,24 +65,45 @@ public class ConstructionSite : MonoBehaviour
 
     private void UpdateConstructionSprite()
     {
-        if (constructionSprites == null || constructionSprites.Length != 4)
+        if (constructionSprites == null || constructionSprites.Length != 5)
         {
-            Debug.LogWarning("Ќе настроены спрайты строительства! Ќужно 4 спрайта.");
+            Debug.LogWarning("Ќе настроены спрайты строительства! Ќужно 5 спрайтов.");
             return;
         }
 
-        // ќпредел€ем текущую стадию строительства (0-3)
-        int stage = Mathf.FloorToInt((float)deliveredPlanks / requiredPlanks * 3);
-        stage = Mathf.Clamp(stage, 0, 3);
+        // ќпредел€ем текущую стадию строительства (0-4)
+        int stage = Mathf.FloorToInt((float)deliveredPlanks / requiredPlanks * 4);
+        stage = Mathf.Clamp(stage, 0, 4);
 
         spriteRenderer.sprite = constructionSprites[stage];
 
+        // ѕримен€ем смещение позиции если нужно
+        if (useCustomOffsets)
+        {
+            ApplySpriteOffset(stage);
+        }
+
         // ≈сли это последн€€ стади€, но здание еще не завершено
-        if (stage == 3 && !isComplete)
+        if (stage == 4 && !isComplete)
         {
             // ћожно добавить временный спрайт "почти готово"
             // или оставить как есть - последний спрайт будет отображатьс€ при завершении
         }
+    }
+
+    private void ApplySpriteOffset(int stage)
+    {
+        // —охран€ем оригинальную позицию и примен€ем смещение
+        Vector3 originalPosition = transform.position;
+
+        // ≈сли это первый спрайт, запоминаем оригинальную позицию как базовую
+        if (stage == 0 && !isComplete)
+        {
+            // ћожно сохранить базовую позицию если нужно
+        }
+
+        // ѕримен€ем смещение дл€ текущей стадии
+        transform.position = originalPosition + spriteOffsets[stage];
     }
 
     private void CompleteConstruction()
@@ -78,9 +111,15 @@ public class ConstructionSite : MonoBehaviour
         isComplete = true;
 
         // ”станавливаем финальный спрайт (последний в массиве)
-        if (constructionSprites != null && constructionSprites.Length >= 4)
+        if (constructionSprites != null && constructionSprites.Length >= 5)
         {
-            spriteRenderer.sprite = constructionSprites[3];
+            spriteRenderer.sprite = constructionSprites[4];
+
+            // ѕримен€ем финальное смещение если используетс€
+            if (useCustomOffsets)
+            {
+                ApplySpriteOffset(4);
+            }
         }
 
         // Ёффект завершени€ строительства
@@ -88,12 +127,6 @@ public class ConstructionSite : MonoBehaviour
         {
             completeEffect.Play();
         }
-
-        // ћожно добавить дополнительные действи€:
-        // - ¬ключить коллайдер готового здани€
-        // - ƒобавить функциональность (например, дл€ таверны - возможность заходить)
-        // - ¬оспроизвести звук
-        // - ”ведомить систему о завершении строительства
 
         Debug.Log("«дание построено!");
 

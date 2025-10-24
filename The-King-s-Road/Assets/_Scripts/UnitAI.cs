@@ -1,4 +1,4 @@
-using UnityEngine;
+п»їusing UnityEngine;
 using System.Collections;
 
 public class UnitAI : MonoBehaviour
@@ -7,15 +7,16 @@ public class UnitAI : MonoBehaviour
     private Vector3 targetPosition;
     public float movementSpeed = 2f;
 
-    // Для ограничения движения
+    // Р”Р»СЏ РѕРіСЂР°РЅРёС‡РµРЅРёСЏ РґРІРёР¶РµРЅРёСЏ
     private Camera mainCamera;
     private float objectWidth;
     private float objectHeight;
 
-    // Для предотвращения дрожания
+    // Р”Р»СЏ РїСЂРµРґРѕС‚РІСЂР°С‰РµРЅРёСЏ РґСЂРѕР¶Р°РЅРёСЏ
     private float directionThreshold = 0.5f;
+    private bool isWaiting = false;
 
-    // НОВОЕ: Система состояний и строительства
+    // РЎРёСЃС‚РµРјР° СЃРѕСЃС‚РѕСЏРЅРёР№
     public enum UnitState { Idle, MovingToStorage, MovingToSite, Working }
     public UnitState currentState = UnitState.Idle;
 
@@ -23,63 +24,184 @@ public class UnitAI : MonoBehaviour
     private ConstructionSite currentSite;
     private bool hasPlank = false;
 
+    // Р”Р»СЏ СѓРїСЂР°РІР»РµРЅРёСЏ Р°РЅРёРјР°С†РёСЏРјРё
+    private float idleTimer = 0f;
+    public float idleSwitchTime = 3f;
+
+    [Header("Collision Avoidance")]
+    public LayerMask obstacleLayer;
+    public float raycastDistance = 1.5f;
+    public float avoidanceForce = 5f;
+    public float stopDistance = 0.3f;
+
     void Start()
     {
         animator = GetComponent<Animator>();
         mainCamera = Camera.main;
 
-        // Получаем размеры коллайдера юнита для границ
+        // РџРѕР»СѓС‡Р°РµРј СЂР°Р·РјРµСЂС‹ РєРѕР»Р»Р°Р№РґРµСЂР° СЋРЅРёС‚Р° РґР»СЏ РіСЂР°РЅРёС†
         SpriteRenderer sr = GetComponent<SpriteRenderer>();
         objectWidth = sr.bounds.extents.x;
         objectHeight = sr.bounds.extents.y;
 
-        // Находим склад на сцене
+        // РќР°С…РѕРґРёРј СЃРєР»Р°Рґ РЅР° СЃС†РµРЅРµ
         storage = FindObjectOfType<Storage>();
 
-        // Начинаем с поиска работы
+        // РЈСЃС‚Р°РЅР°РІР»РёРІР°РµРј РЅР°С‡Р°Р»СЊРЅСѓСЋ idle Р°РЅРёРјР°С†РёСЋ
+        SetIdleAnimation();
+
+        // РќР°С‡РёРЅР°РµРј СЃ РїРѕРёСЃРєР° СЂР°Р±РѕС‚С‹
         FindJob();
     }
 
     void Update()
     {
-        // Обрабатываем только состояния движения
+        // РЈРїСЂР°РІР»РµРЅРёРµ СЃРјРµРЅРѕР№ idle Р°РЅРёРјР°С†РёР№
+        if (currentState == UnitState.Idle && !isWaiting)
+        {
+            idleTimer += Time.deltaTime;
+            if (idleTimer >= idleSwitchTime)
+            {
+                idleTimer = 0f;
+                SwitchIdleVariant();
+            }
+        }
+
+        // РћР±СЂР°Р±Р°С‚С‹РІР°РµРј С‚РѕР»СЊРєРѕ СЃРѕСЃС‚РѕСЏРЅРёСЏ РґРІРёР¶РµРЅРёСЏ
         if (currentState == UnitState.MovingToStorage || currentState == UnitState.MovingToSite)
         {
-            MoveToTarget();
+            MoveToTargetWithAvoidance();
         }
     }
 
-    void MoveToTarget()
+    void SetIdleAnimation()
     {
-        // Двигаемся к цели
-        transform.position = Vector3.MoveTowards(transform.position, targetPosition, movementSpeed * Time.deltaTime);
-
-        // Определяем направление с порогом для избежания дрожания
-        float xDifference = targetPosition.x - transform.position.x;
-
-        // Поворачиваем спрайт только если разница значительная
-        if (Mathf.Abs(xDifference) > directionThreshold)
+        if (animator != null)
         {
-            if (xDifference > 0)
+            animator.SetBool("IsWalking", false);
+        }
+    }
+
+    void SetWalkAnimation()
+    {
+        if (animator != null)
+        {
+            animator.SetBool("IsWalking", true);
+        }
+    }
+
+    void SwitchIdleVariant()
+    {
+        if (animator != null)
+        {
+            int randomIdle = Random.Range(0, 2);
+            animator.SetInteger("IdleVariant", randomIdle);
+        }
+    }
+
+    void MoveToTargetWithAvoidance()
+    {
+        Vector3 directionToTarget = (targetPosition - transform.position).normalized;
+        float distanceToTarget = Vector3.Distance(transform.position, targetPosition);
+
+        // РџСЂРѕРІРµСЂСЏРµРј, РµСЃС‚СЊ Р»Рё РїСЂРµРїСЏС‚СЃС‚РІРёРµ РїСЂСЏРјРѕ РЅР° РїСѓС‚Рё
+        RaycastHit2D hit = Physics2D.Raycast(transform.position, directionToTarget, raycastDistance, obstacleLayer);
+        Debug.DrawRay(transform.position, directionToTarget * raycastDistance, Color.blue);
+
+        Vector3 finalDirection = directionToTarget;
+
+        // Р•СЃР»Рё РЅР° РїСѓС‚Рё РїСЂРµРїСЏС‚СЃС‚РІРёРµ - РёР·Р±РµРіР°РµРј РµРіРѕ
+        if (hit.collider != null)
+        {
+            finalDirection = GetAvoidanceDirection(directionToTarget, hit);
+
+            // Р•СЃР»Рё РЅРµ РјРѕР¶РµРј РЅР°Р№С‚Рё Р±РµР·РѕРїР°СЃРЅС‹Р№ РїСѓС‚СЊ - РѕСЃС‚Р°РЅР°РІР»РёРІР°РµРјСЃСЏ
+            if (finalDirection == Vector3.zero)
             {
-                // Движемся вправо
-                transform.localScale = new Vector3(1, 1, 1);
-            }
-            else
-            {
-                // Движемся влево
-                transform.localScale = new Vector3(-1, 1, 1);
+                SetIdleAnimation();
+                StartCoroutine(WaitAndRetry());
+                return;
             }
         }
 
-        // Управляем анимацией
-        bool isMoving = (Vector3.Distance(transform.position, targetPosition) > 0.1f);
-        animator.SetBool("IsWalking", isMoving);
-
-        // Если дошли до цели - обрабатываем событие
-        if (!isMoving)
+        // Р”РІРёРіР°РµРјСЃСЏ С‚РѕР»СЊРєРѕ РµСЃР»Рё РґРѕСЃС‚Р°С‚РѕС‡РЅРѕ РґР°Р»РµРєРѕ РѕС‚ С†РµР»Рё
+        if (distanceToTarget > stopDistance)
         {
+            transform.position += finalDirection * movementSpeed * Time.deltaTime;
+            SetWalkAnimation();
+        }
+        else
+        {
+            SetIdleAnimation();
             OnReachedDestination();
+        }
+
+        // РџРѕРІРѕСЂРѕС‚ СЃРїСЂР°Р№С‚Р°
+        float xDifference = targetPosition.x - transform.position.x;
+        if (Mathf.Abs(xDifference) > directionThreshold)
+        {
+            transform.localScale = new Vector3(xDifference > 0 ? 1 : -1, 1, 1);
+        }
+    }
+
+    Vector3 GetAvoidanceDirection(Vector3 originalDirection, RaycastHit2D obstacleHit)
+    {
+        Vector3 bestDirection = Vector3.zero;
+        float bestScore = -Mathf.Infinity;
+
+        // РџСЂРѕРІРµСЂСЏРµРј 8 РЅР°РїСЂР°РІР»РµРЅРёР№ РІРѕРєСЂСѓРі СЋРЅРёС‚Р°
+        for (int i = 0; i < 8; i++)
+        {
+            float angle = i * 45f;
+            Vector3 testDirection = Quaternion.Euler(0, 0, angle) * Vector3.right;
+
+            // РџСЂРѕРІРµСЂСЏРµРј, СЃРІРѕР±РѕРґРЅРѕ Р»Рё СЌС‚Рѕ РЅР°РїСЂР°РІР»РµРЅРёРµ
+            if (!Physics2D.Raycast(transform.position, testDirection, raycastDistance, obstacleLayer))
+            {
+                // РћС†РµРЅРёРІР°РµРј РЅР°РїСЂР°РІР»РµРЅРёРµ: С‡РµРј Р±Р»РёР¶Рµ Рє РѕСЂРёРіРёРЅР°Р»СЊРЅРѕРјСѓ РЅР°РїСЂР°РІР»РµРЅРёСЋ, С‚РµРј Р»СѓС‡С€Рµ
+                float dotProduct = Vector3.Dot(testDirection, originalDirection);
+                float distanceToTarget = Vector3.Distance(transform.position + testDirection * raycastDistance, targetPosition);
+                float score = dotProduct * 2f - distanceToTarget;
+
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestDirection = testDirection;
+                }
+
+                Debug.DrawRay(transform.position, testDirection * raycastDistance, Color.green);
+            }
+            else
+            {
+                Debug.DrawRay(transform.position, testDirection * raycastDistance, Color.red);
+            }
+        }
+
+        // Р•СЃР»Рё РЅР°С€Р»Рё Р±РµР·РѕРїР°СЃРЅРѕРµ РЅР°РїСЂР°РІР»РµРЅРёРµ
+        if (bestDirection != Vector3.zero)
+        {
+            return bestDirection;
+        }
+
+        // Р•СЃР»Рё РІСЃРµ РЅР°РїСЂР°РІР»РµРЅРёСЏ Р·Р°Р±Р»РѕРєРёСЂРѕРІР°РЅС‹, РїСЂРѕР±СѓРµРј РѕС‚СЃС‚СѓРїРёС‚СЊ
+        Vector3 retreatDirection = -originalDirection;
+        if (!Physics2D.Raycast(transform.position, retreatDirection, raycastDistance, obstacleLayer))
+        {
+            Debug.DrawRay(transform.position, retreatDirection * raycastDistance, Color.yellow);
+            return retreatDirection;
+        }
+
+        return Vector3.zero;
+    }
+
+    IEnumerator WaitAndRetry()
+    {
+        yield return new WaitForSeconds(2f);
+
+        // РџРѕСЃР»Рµ РѕР¶РёРґР°РЅРёСЏ СЃРЅРѕРІР° РїС‹С‚Р°РµРјСЃСЏ РґРІРёРіР°С‚СЊСЃСЏ Рє С†РµР»Рё
+        if (currentState == UnitState.MovingToStorage || currentState == UnitState.MovingToSite)
+        {
+            SetWalkAnimation();
         }
     }
 
@@ -99,45 +221,39 @@ public class UnitAI : MonoBehaviour
 
     void OnReachedStorage()
     {
-        Debug.Log("Достигнут склад");
-
         if (storage.TakePlank())
         {
             hasPlank = true;
             currentState = UnitState.MovingToSite;
             targetPosition = currentSite.transform.position;
-            Debug.Log("Взял доску, иду на стройку");
+            SetWalkAnimation();
         }
         else
         {
-            Debug.Log("На складе нет досок, жду...");
-            // Ждем и пробуем снова
+            currentState = UnitState.Idle;
+            SetIdleAnimation();
             StartCoroutine(WaitAndRetryStorage());
         }
     }
 
     void OnReachedSite()
     {
-        Debug.Log("Достигнута стройка");
-
         if (hasPlank && currentSite != null)
         {
             currentSite.DeliverPlank();
             hasPlank = false;
 
-            // Проверяем, нужно ли еще доски
             if (currentSite.NeedsPlanks())
             {
-                // Идем за следующей доской
                 currentState = UnitState.MovingToStorage;
                 targetPosition = storage.transform.position;
-                Debug.Log("Иду за следующей доской");
+                SetWalkAnimation();
             }
             else
             {
-                // Строительство завершено
-                Debug.Log("Строительство завершено! Ищу новую работу");
                 currentSite = null;
+                currentState = UnitState.Idle;
+                SetIdleAnimation();
                 FindJob();
             }
         }
@@ -145,23 +261,24 @@ public class UnitAI : MonoBehaviour
 
     IEnumerator WaitAndRetryStorage()
     {
-        // Ждем 3 секунды и пробуем снова
         yield return new WaitForSeconds(3f);
 
         if (storage != null)
         {
             currentState = UnitState.MovingToStorage;
             targetPosition = storage.transform.position;
+            SetWalkAnimation();
         }
         else
         {
+            currentState = UnitState.Idle;
+            SetIdleAnimation();
             FindJob();
         }
     }
 
     void FindJob()
     {
-        // Ищем все строящиеся здания на сцене
         ConstructionSite[] sites = FindObjectsOfType<ConstructionSite>();
 
         foreach (ConstructionSite site in sites)
@@ -171,34 +288,30 @@ public class UnitAI : MonoBehaviour
                 currentSite = site;
                 currentState = UnitState.MovingToStorage;
                 targetPosition = storage.transform.position;
-                Debug.Log("Нашел работу! Иду на склад");
+                SetWalkAnimation();
                 return;
             }
         }
 
-        // Если работы нет - переходим в режим блуждания
-        Debug.Log("Работы нет, перехожу в режим ожидания");
         StartWandering();
     }
 
     void StartWandering()
     {
         currentState = UnitState.Idle;
+        SetIdleAnimation();
         GetNewTarget();
     }
 
     void GetNewTarget()
     {
-        // Находим новую случайную точку в пределах видимости камеры
         Vector3 screenBounds = mainCamera.ScreenToWorldPoint(new Vector3(Screen.width, Screen.height, mainCamera.nearClipPlane));
 
-        // Вычисляем границы с учетом размеров самого юнита
         float minX = mainCamera.transform.position.x - screenBounds.x + objectWidth;
         float maxX = mainCamera.transform.position.x + screenBounds.x - objectWidth;
         float minY = mainCamera.transform.position.y - screenBounds.y + objectHeight;
         float maxY = mainCamera.transform.position.y + screenBounds.y - objectHeight;
 
-        // Пытаемся найти валидную позицию
         int attempts = 0;
         do
         {
@@ -207,39 +320,56 @@ public class UnitAI : MonoBehaviour
         }
         while (IsPositionBlocked(targetPosition) && attempts < 10);
 
-        // Запускаем движение к цели
-        currentState = UnitState.Idle;
         StartCoroutine(MoveToWanderTarget());
     }
 
     IEnumerator MoveToWanderTarget()
     {
-        while (Vector3.Distance(transform.position, targetPosition) > 0.1f)
+        SetWalkAnimation();
+
+        while (Vector3.Distance(transform.position, targetPosition) > stopDistance)
         {
-            // Если появилась работа - прерываем блуждание
             if (currentState != UnitState.Idle)
                 yield break;
 
-            transform.position = Vector3.MoveTowards(transform.position, targetPosition, movementSpeed * Time.deltaTime);
+            Vector3 direction = (targetPosition - transform.position).normalized;
 
-            // Анимация и поворот
+            // РСЃРїРѕР»СЊР·СѓРµРј С‚Сѓ Р¶Рµ Р»РѕРіРёРєСѓ РёР·Р±РµРіР°РЅРёСЏ РїСЂРё Р±Р»СѓР¶РґР°РЅРёРё
+            RaycastHit2D hit = Physics2D.Raycast(transform.position, direction, raycastDistance, obstacleLayer);
+
+            if (hit.collider != null)
+            {
+                Vector3 avoidDirection = GetAvoidanceDirection(direction, hit);
+                if (avoidDirection != Vector3.zero)
+                {
+                    transform.position += avoidDirection * movementSpeed * Time.deltaTime;
+                }
+                else
+                {
+                    // Р•СЃР»Рё РїСѓС‚СЊ Р·Р°Р±Р»РѕРєРёСЂРѕРІР°РЅ, РёС‰РµРј РЅРѕРІСѓСЋ С†РµР»СЊ
+                    GetNewTarget();
+                    yield break;
+                }
+            }
+            else
+            {
+                transform.position += direction * movementSpeed * Time.deltaTime;
+            }
+
             float xDifference = targetPosition.x - transform.position.x;
             if (Mathf.Abs(xDifference) > directionThreshold)
             {
                 transform.localScale = new Vector3(xDifference > 0 ? 1 : -1, 1, 1);
             }
-            animator.SetBool("IsWalking", true);
 
             yield return null;
         }
 
-        // Достигли цели - ждем и ищем новую
-        animator.SetBool("IsWalking", false);
+        SetIdleAnimation();
+        SwitchIdleVariant();
 
-        // Периодически проверяем, нет ли работы
         yield return new WaitForSeconds(Random.Range(2f, 5f));
 
-        // Проверяем работу перед следующим блужданием
         ConstructionSite[] sites = FindObjectsOfType<ConstructionSite>();
         foreach (ConstructionSite site in sites)
         {
@@ -250,13 +380,12 @@ public class UnitAI : MonoBehaviour
             }
         }
 
-        // Если работы нет - продолжаем блуждать
         GetNewTarget();
     }
 
     bool IsPositionBlocked(Vector3 position)
     {
-        Collider2D hit = Physics2D.OverlapCircle(position, 0.5f);
-        return hit != null && hit.CompareTag("TownHall");
+        Collider2D hit = Physics2D.OverlapCircle(position, 0.5f, obstacleLayer);
+        return hit != null;
     }
 }

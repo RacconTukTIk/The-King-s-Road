@@ -7,6 +7,8 @@ TagManager:
   - TownHall
   - Unit
   - SideCollider
+  - Storage
+  - ConstructionSite
   layers:
   - Default
   - TransparentFX
@@ -14,8 +16,8 @@ TagManager:
   - 
   - Water
   - UI
-  - 
-  - 
+  - Obstacles
+  - Units
   - 
   - 
   - 
@@ -55,6 +57,9 @@ TagManager:
     locked: 0
   - name: Foreground
     uniqueID: 277226909
+    locked: 0
+  - name: Obstacles
+    uniqueID: 124594077
     locked: 0
   m_RenderingLayers:
   - Default
