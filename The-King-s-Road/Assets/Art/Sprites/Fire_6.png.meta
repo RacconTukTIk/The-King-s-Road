@@ -1,13 +1,13 @@
 fileFormatVersion: 2
-guid: 4ac37a50bae428c479169d21da236e5e
+guid: 3feb4f8e72cb5b144929eed37611f455
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 2608534806445164875
-    second: Fire_2_0
+      213: -3604178134826468204
+    second: Fire_6_0
   - first:
-      213: 738921683762898472
-    second: Fire_2_1
+      213: -669573959695749388
+    second: Fire_6_1
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -129,35 +129,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: Fire_2_0
-      rect:
-        serializedVersion: 2
-        x: 2
-        y: 11
-        width: 6
-        height: 7
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: b49086af590633420800000000000000
-      internalID: 2608534806445164875
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: Fire_2_1
+      name: Fire_6_0
       rect:
         serializedVersion: 2
         x: 4
         y: 0
         width: 24
-        height: 30
+        height: 21
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -166,8 +144,30 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 826658d3b5d214a00800000000000000
-      internalID: 738921683762898472
+      spriteID: 49c307605136bfdc0800000000000000
+      internalID: -3604178134826468204
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Fire_6_1
+      rect:
+        serializedVersion: 2
+        x: 19
+        y: 13
+        width: 7
+        height: 9
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 4feab7df70235b6f0800000000000000
+      internalID: -669573959695749388
       vertices: []
       indices: 
       edges: []
@@ -186,8 +186,8 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      Fire_2_0: 2608534806445164875
-      Fire_2_1: 738921683762898472
+      Fire_6_0: -3604178134826468204
+      Fire_6_1: -669573959695749388
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

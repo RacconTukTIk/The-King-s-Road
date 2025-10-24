@@ -5,9 +5,6 @@ TextureImporter:
   - first:
       213: 6897678924904568616
     second: Fire_5_0
-  - first:
-      213: 8057984255596494385
-    second: Fire_5_1
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -54,7 +51,7 @@ TextureImporter:
   spriteMeshType: 1
   alignment: 9
   spritePivot: {x: 0.5, y: 0.5}
-  spritePixelsToUnits: 100
+  spritePixelsToUnits: 25
   spriteBorder: {x: 0, y: 0, z: 0, w: 0}
   spriteGenerateFallbackPhysicsShape: 1
   alphaUsage: 1
@@ -99,6 +96,32 @@ TextureImporter:
     ignorePlatformSupport: 0
     androidETC2FallbackOverride: 0
     forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: WebGL
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: WindowsStoreApps
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
   spriteSheet:
     serializedVersion: 2
     sprites:
@@ -106,10 +129,10 @@ TextureImporter:
       name: Fire_5_0
       rect:
         serializedVersion: 2
-        x: 9
-        y: 3
-        width: 82
-        height: 67
+        x: 4
+        y: 0
+        width: 24
+        height: 22
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -120,28 +143,6 @@ TextureImporter:
       bones: []
       spriteID: 82792adcf6a79bf50800000000000000
       internalID: 6897678924904568616
-      vertices: []
-      indices: 
-      edges: []
-      weights: []
-    - serializedVersion: 2
-      name: Fire_5_1
-      rect:
-        serializedVersion: 2
-        x: 57
-        y: 58
-        width: 13
-        height: 15
-      alignment: 0
-      pivot: {x: 0, y: 0}
-      border: {x: 0, y: 0, z: 0, w: 0}
-      customData: 
-      outline: []
-      physicsShape: []
-      tessellationDetail: -1
-      bones: []
-      spriteID: 13ef488ccf5b3df60800000000000000
-      internalID: 8057984255596494385
       vertices: []
       indices: 
       edges: []
@@ -161,7 +162,6 @@ TextureImporter:
       entries: []
     nameFileIdTable:
       Fire_5_0: 6897678924904568616
-      Fire_5_1: 8057984255596494385
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

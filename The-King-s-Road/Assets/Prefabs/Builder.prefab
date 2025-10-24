@@ -14,7 +14,7 @@ GameObject:
   - component: {fileID: 2819762616054991850}
   - component: {fileID: 2048874586229017774}
   - component: {fileID: 4674685793449574185}
-  m_Layer: 7
+  m_Layer: 4
   m_Name: Builder
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -82,7 +82,7 @@ SpriteRenderer:
   m_GlobalIlluminationMeshLod: 0
   m_SortingLayerID: -1010939569
   m_SortingLayer: 3
-  m_SortingOrder: 2
+  m_SortingOrder: 1
   m_Sprite: {fileID: -7385936556723163622, guid: e849cac40dce37e4fa2836d864358792, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
@@ -209,5 +209,4 @@ MonoBehaviour:
     m_Bits: 64
   raycastDistance: 1.5
   avoidanceForce: 5
-  interactionDistance: 0.5
-  maxWaitTime: 5
+  stopDistance: 0.3

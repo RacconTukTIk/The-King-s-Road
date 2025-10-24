@@ -1,13 +1,13 @@
 fileFormatVersion: 2
-guid: 4ac37a50bae428c479169d21da236e5e
+guid: bbdf98ff6a301da4b9bfe5e926a0479a
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 2608534806445164875
-    second: Fire_2_0
+      213: -3589208122338992936
+    second: Progres_Bar_3_0
   - first:
-      213: 738921683762898472
-    second: Fire_2_1
+      213: -2321965619002779536
+    second: Progres_Bar_3_1
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -54,7 +54,7 @@ TextureImporter:
   spriteMeshType: 1
   alignment: 9
   spritePivot: {x: 0.5, y: 0.5}
-  spritePixelsToUnits: 25
+  spritePixelsToUnits: 30
   spriteBorder: {x: 0, y: 0, z: 0, w: 0}
   spriteGenerateFallbackPhysicsShape: 1
   alphaUsage: 1
@@ -129,13 +129,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: Fire_2_0
+      name: Progres_Bar_3_0
       rect:
         serializedVersion: 2
-        x: 2
-        y: 11
-        width: 6
-        height: 7
+        x: 16
+        y: 52
+        width: 22
+        height: 23
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -144,20 +144,20 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: b49086af590633420800000000000000
-      internalID: 2608534806445164875
+      spriteID: 8dc990baa32903ec0800000000000000
+      internalID: -3589208122338992936
       vertices: []
       indices: 
       edges: []
       weights: []
     - serializedVersion: 2
-      name: Fire_2_1
+      name: Progres_Bar_3_1
       rect:
         serializedVersion: 2
-        x: 4
-        y: 0
-        width: 24
-        height: 30
+        x: 31
+        y: 16
+        width: 130
+        height: 34
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -166,8 +166,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 826658d3b5d214a00800000000000000
-      internalID: 738921683762898472
+      spriteID: 0785ba26298b6cfd0800000000000000
+      internalID: -2321965619002779536
       vertices: []
       indices: 
       edges: []
@@ -186,8 +186,8 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      Fire_2_0: 2608534806445164875
-      Fire_2_1: 738921683762898472
+      Progres_Bar_3_0: -3589208122338992936
+      Progres_Bar_3_1: -2321965619002779536
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 
