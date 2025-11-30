@@ -273,6 +273,59 @@ RectTransform:
   m_AnchoredPosition: {x: -638.2864, y: -92.50021}
   m_SizeDelta: {x: 382.88, y: 126.88}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!1 &492393594
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 492393596}
+  - component: {fileID: 492393595}
+  m_Layer: 0
+  m_Name: AudioManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &492393595
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 492393594}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9f5b8881adbdb5e42b03426ce148ac08, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AudioManager
+  musicSource: {fileID: 0}
+  sfxSource: {fileID: 0}
+  mainMenuMusic: {fileID: 8300000, guid: 797fce45c9a016a4db0f65287306f6cc, type: 3}
+  footstepSound: {fileID: 8300000, guid: 1df16d426d268884b8c5d2525477bd75, type: 3}
+  buttonClickSound: {fileID: 0}
+  constructionSound: {fileID: 0}
+  completeSound: {fileID: 0}
+  musicVolume: 0.5
+  sfxVolume: 0.7
+--- !u!4 &492393596
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 492393594}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 2.35401, y: 0.57725, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &519420028
 GameObject:
   m_ObjectHideFlags: 0
@@ -769,3 +822,4 @@ SceneRoots:
   - {fileID: 519420032}
   - {fileID: 870556898}
   - {fileID: 202383864}
+  - {fileID: 492393596}

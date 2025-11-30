@@ -34,6 +34,11 @@ public class UnitAI : MonoBehaviour
     public float avoidanceForce = 5f;
     public float stopDistance = 0.3f;
 
+    [Header("Footstep Audio")]
+    public float footstepInterval = 0.5f; // Интервал между звуками шагов
+    private float footstepTimer = 0f;
+    public float footstepVolume = 0.3f;
+
     void Start()
     {
         animator = GetComponent<Animator>();
@@ -67,10 +72,39 @@ public class UnitAI : MonoBehaviour
             }
         }
 
+        // Обработка звуков шагов
+        HandleFootstepAudio();
+
         // Обрабатываем только состояния движения
         if (currentState == UnitState.MovingToStorage || currentState == UnitState.MovingToSite)
         {
             MoveToTargetWithAvoidance();
+        }
+    }
+
+    void HandleFootstepAudio()
+    {
+        // Воспроизводим звуки шагов только когда юнит движется
+        if (currentState == UnitState.MovingToStorage || currentState == UnitState.MovingToSite)
+        {
+            footstepTimer += Time.deltaTime;
+            if (footstepTimer >= footstepInterval)
+            {
+                PlayFootstepSound();
+                footstepTimer = 0f;
+            }
+        }
+        else
+        {
+            footstepTimer = 0f; // Сбрасываем таймер когда не двигаемся
+        }
+    }
+
+    void PlayFootstepSound()
+    {
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.PlaySFXAtPosition("footstep", transform.position, footstepVolume);
         }
     }
 
