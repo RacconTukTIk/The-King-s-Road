@@ -150,7 +150,13 @@ public class MainMenu : MonoBehaviour
     }
 
     void LoadGameScene()
-    {
+    {   
+        //Остановка музыки при загрузке новой сцены
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.StopMusic();
+        }
+
         // Проверяем существование сцены
         if (SceneExists(gameSceneName))
         {

@@ -302,8 +302,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9f5b8881adbdb5e42b03426ce148ac08, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AudioManager
-  musicSource: {fileID: 0}
-  sfxSource: {fileID: 0}
   mainMenuMusic: {fileID: 8300000, guid: 797fce45c9a016a4db0f65287306f6cc, type: 3}
   footstepSound: {fileID: 8300000, guid: 1df16d426d268884b8c5d2525477bd75, type: 3}
   buttonClickSound: {fileID: 0}
@@ -821,5 +819,5 @@ SceneRoots:
   m_Roots:
   - {fileID: 519420032}
   - {fileID: 870556898}
-  - {fileID: 202383864}
   - {fileID: 492393596}
+  - {fileID: 202383864}
