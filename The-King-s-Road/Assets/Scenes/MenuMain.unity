@@ -304,7 +304,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::AudioManager
   mainMenuMusic: {fileID: 8300000, guid: 797fce45c9a016a4db0f65287306f6cc, type: 3}
   footstepSound: {fileID: 8300000, guid: 1df16d426d268884b8c5d2525477bd75, type: 3}
-  buttonClickSound: {fileID: 0}
+  buttonClickSound: {fileID: 8300000, guid: 9fcf3e6a385a60c4d8e29bd1175a511b, type: 3}
   constructionSound: {fileID: 0}
   completeSound: {fileID: 0}
   musicVolume: 0.5
