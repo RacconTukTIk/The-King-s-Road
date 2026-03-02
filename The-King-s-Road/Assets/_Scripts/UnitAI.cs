@@ -17,12 +17,13 @@ public class UnitAI : MonoBehaviour
     private bool isWaiting = false;
 
     // Система состояний
-    public enum UnitState { Idle, MovingToStorage, MovingToSite, Working }
+    public enum UnitState { Idle, MovingToStorage, MovingToSite, Working, EnteringBuilding }
     public UnitState currentState = UnitState.Idle;
 
     private Storage storage;
     private ConstructionSite currentSite;
     private bool hasPlank = false;
+    private bool isMovingToDoor = false;
 
     // Для управления анимациями
     private float idleTimer = 0f;
@@ -35,33 +36,35 @@ public class UnitAI : MonoBehaviour
     public float stopDistance = 0.3f;
 
     [Header("Footstep Audio")]
-    public float footstepInterval = 0.5f; // Интервал между звуками шагов
+    public float footstepInterval = 0.5f;
     private float footstepTimer = 0f;
     public float footstepVolume = 0.3f;
+
+    [Header("Plank Visual")]
+    public GameObject plankVisual;
 
     void Start()
     {
         animator = GetComponent<Animator>();
         mainCamera = Camera.main;
 
-        // Получаем размеры коллайдера юнита для границ
         SpriteRenderer sr = GetComponent<SpriteRenderer>();
         objectWidth = sr.bounds.extents.x;
         objectHeight = sr.bounds.extents.y;
 
-        // Находим склад на сцене
         storage = FindObjectOfType<Storage>();
 
-        // Устанавливаем начальную idle анимацию
         SetIdleAnimation();
 
-        // Начинаем с поиска работы
+        // Скрываем доску в начале
+        if (plankVisual != null)
+            plankVisual.SetActive(false);
+
         FindJob();
     }
 
     void Update()
     {
-        // Управление сменой idle анимаций
         if (currentState == UnitState.Idle && !isWaiting)
         {
             idleTimer += Time.deltaTime;
@@ -72,10 +75,8 @@ public class UnitAI : MonoBehaviour
             }
         }
 
-        // Обработка звуков шагов
         HandleFootstepAudio();
 
-        // Обрабатываем только состояния движения
         if (currentState == UnitState.MovingToStorage || currentState == UnitState.MovingToSite)
         {
             MoveToTargetWithAvoidance();
@@ -84,7 +85,6 @@ public class UnitAI : MonoBehaviour
 
     void HandleFootstepAudio()
     {
-        // Воспроизводим звуки шагов только когда юнит движется
         if (currentState == UnitState.MovingToStorage || currentState == UnitState.MovingToSite)
         {
             footstepTimer += Time.deltaTime;
@@ -96,7 +96,7 @@ public class UnitAI : MonoBehaviour
         }
         else
         {
-            footstepTimer = 0f; // Сбрасываем таймер когда не двигаемся
+            footstepTimer = 0f;
         }
     }
 
@@ -138,18 +138,32 @@ public class UnitAI : MonoBehaviour
         Vector3 directionToTarget = (targetPosition - transform.position).normalized;
         float distanceToTarget = Vector3.Distance(transform.position, targetPosition);
 
-        // Проверяем, есть ли препятствие прямо на пути
+        // Если цель - дверь склада, игнорируем коллайдер этого склада
+        bool ignoreStorageCollider = false;
+        if (currentState == UnitState.MovingToStorage && storage != null)
+        {
+            if (Vector3.Distance(targetPosition, storage.GetDoorPosition()) < 0.1f)
+            {
+                ignoreStorageCollider = true;
+            }
+        }
+
         RaycastHit2D hit = Physics2D.Raycast(transform.position, directionToTarget, raycastDistance, obstacleLayer);
+
+        if (ignoreStorageCollider && hit.collider != null && hit.collider.gameObject == storage.gameObject)
+        {
+            Physics2D.IgnoreCollision(GetComponent<Collider2D>(), hit.collider, true);
+            hit = new RaycastHit2D();
+        }
+
         Debug.DrawRay(transform.position, directionToTarget * raycastDistance, Color.blue);
 
         Vector3 finalDirection = directionToTarget;
 
-        // Если на пути препятствие - избегаем его
         if (hit.collider != null)
         {
             finalDirection = GetAvoidanceDirection(directionToTarget, hit);
 
-            // Если не можем найти безопасный путь - останавливаемся
             if (finalDirection == Vector3.zero)
             {
                 SetIdleAnimation();
@@ -158,7 +172,6 @@ public class UnitAI : MonoBehaviour
             }
         }
 
-        // Двигаемся только если достаточно далеко от цели
         if (distanceToTarget > stopDistance)
         {
             transform.position += finalDirection * movementSpeed * Time.deltaTime;
@@ -170,7 +183,6 @@ public class UnitAI : MonoBehaviour
             OnReachedDestination();
         }
 
-        // Поворот спрайта
         float xDifference = targetPosition.x - transform.position.x;
         if (Mathf.Abs(xDifference) > directionThreshold)
         {
@@ -183,16 +195,13 @@ public class UnitAI : MonoBehaviour
         Vector3 bestDirection = Vector3.zero;
         float bestScore = -Mathf.Infinity;
 
-        // Проверяем 8 направлений вокруг юнита
         for (int i = 0; i < 8; i++)
         {
             float angle = i * 45f;
             Vector3 testDirection = Quaternion.Euler(0, 0, angle) * Vector3.right;
 
-            // Проверяем, свободно ли это направление
             if (!Physics2D.Raycast(transform.position, testDirection, raycastDistance, obstacleLayer))
             {
-                // Оцениваем направление: чем ближе к оригинальному направлению, тем лучше
                 float dotProduct = Vector3.Dot(testDirection, originalDirection);
                 float distanceToTarget = Vector3.Distance(transform.position + testDirection * raycastDistance, targetPosition);
                 float score = dotProduct * 2f - distanceToTarget;
@@ -211,13 +220,11 @@ public class UnitAI : MonoBehaviour
             }
         }
 
-        // Если нашли безопасное направление
         if (bestDirection != Vector3.zero)
         {
             return bestDirection;
         }
 
-        // Если все направления заблокированы, пробуем отступить
         Vector3 retreatDirection = -originalDirection;
         if (!Physics2D.Raycast(transform.position, retreatDirection, raycastDistance, obstacleLayer))
         {
@@ -232,7 +239,6 @@ public class UnitAI : MonoBehaviour
     {
         yield return new WaitForSeconds(2f);
 
-        // После ожидания снова пытаемся двигаться к цели
         if (currentState == UnitState.MovingToStorage || currentState == UnitState.MovingToSite)
         {
             SetWalkAnimation();
@@ -255,15 +261,28 @@ public class UnitAI : MonoBehaviour
 
     void OnReachedStorage()
     {
-        if (storage.TakePlank())
+        StartCoroutine(EnterStorage());
+    }
+
+    IEnumerator EnterStorage()
+    {
+        currentState = UnitState.EnteringBuilding;
+        SetIdleAnimation();
+
+        Debug.Log("Подошел к двери, захожу внутрь...");
+
+        yield return StartCoroutine(storage.EnterAndTakePlank(this));
+
+        if (hasPlank)
         {
-            hasPlank = true;
+            Debug.Log("Вышел со склада с доской, иду к стройке");
             currentState = UnitState.MovingToSite;
             targetPosition = currentSite.transform.position;
             SetWalkAnimation();
         }
         else
         {
+            Debug.Log("На складе нет досок");
             currentState = UnitState.Idle;
             SetIdleAnimation();
             StartCoroutine(WaitAndRetryStorage());
@@ -277,10 +296,13 @@ public class UnitAI : MonoBehaviour
             currentSite.DeliverPlank();
             hasPlank = false;
 
+            if (plankVisual != null)
+                plankVisual.SetActive(false);
+
             if (currentSite.NeedsPlanks())
             {
                 currentState = UnitState.MovingToStorage;
-                targetPosition = storage.transform.position;
+                targetPosition = storage.GetDoorPosition();
                 SetWalkAnimation();
             }
             else
@@ -300,7 +322,7 @@ public class UnitAI : MonoBehaviour
         if (storage != null)
         {
             currentState = UnitState.MovingToStorage;
-            targetPosition = storage.transform.position;
+            targetPosition = storage.GetDoorPosition();
             SetWalkAnimation();
         }
         else
@@ -321,8 +343,9 @@ public class UnitAI : MonoBehaviour
             {
                 currentSite = site;
                 currentState = UnitState.MovingToStorage;
-                targetPosition = storage.transform.position;
+                targetPosition = storage.GetDoorPosition();
                 SetWalkAnimation();
+                Debug.Log("Нашел работу, иду к двери склада");
                 return;
             }
         }
@@ -368,7 +391,6 @@ public class UnitAI : MonoBehaviour
 
             Vector3 direction = (targetPosition - transform.position).normalized;
 
-            // Используем ту же логику избегания при блуждании
             RaycastHit2D hit = Physics2D.Raycast(transform.position, direction, raycastDistance, obstacleLayer);
 
             if (hit.collider != null)
@@ -380,7 +402,6 @@ public class UnitAI : MonoBehaviour
                 }
                 else
                 {
-                    // Если путь заблокирован, ищем новую цель
                     GetNewTarget();
                     yield break;
                 }
@@ -421,5 +442,26 @@ public class UnitAI : MonoBehaviour
     {
         Collider2D hit = Physics2D.OverlapCircle(position, 0.5f, obstacleLayer);
         return hit != null;
+    }
+
+    public void SetHasPlank(bool value)
+    {
+        hasPlank = value;
+
+        if (plankVisual != null)
+            plankVisual.SetActive(value);
+    }
+
+    void OnDestroy()
+    {
+        if (storage != null)
+        {
+            Collider2D unitCollider = GetComponent<Collider2D>();
+            Collider2D storageCollider = storage.GetComponent<Collider2D>();
+            if (unitCollider != null && storageCollider != null)
+            {
+                Physics2D.IgnoreCollision(unitCollider, storageCollider, false);
+            }
+        }
     }
 }
