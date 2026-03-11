@@ -271,14 +271,31 @@ public class UnitAI : MonoBehaviour
 
         Debug.Log("Подошел к двери, захожу внутрь...");
 
-        yield return StartCoroutine(storage.EnterAndTakePlank(this));
+        // Важно: сохраняем ссылку
+        var currentStorage = storage;
+        var currentSiteRef = currentSite;
+
+        Debug.Log($"Запускаю корутину склада. Склад: {currentStorage}, Стройка: {currentSiteRef}");
+
+        yield return StartCoroutine(currentStorage.EnterAndTakePlank(this));
+
+        // ⚠️ Этот лог должен появиться после завершения корутины склада
+        Debug.Log($"Корутина склада завершена. hasPlank = {hasPlank}");
 
         if (hasPlank)
         {
             Debug.Log("Вышел со склада с доской, иду к стройке");
             currentState = UnitState.MovingToSite;
-            targetPosition = currentSite.transform.position;
-            SetWalkAnimation();
+            if (currentSiteRef != null)
+            {
+                targetPosition = currentSiteRef.transform.position;
+                SetWalkAnimation();
+            }
+            else
+            {
+                Debug.LogError("currentSiteRef = null после выхода из склада!");
+                FindJob();
+            }
         }
         else
         {
