@@ -1,7 +1,9 @@
 using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
 
-public class ConstructionSite : MonoBehaviour
+public class ConstructionSite : Building
 {
     public int requiredPlanks = 10;
     public int deliveredPlanks = 0;
@@ -15,12 +17,10 @@ public class ConstructionSite : MonoBehaviour
     public ParticleSystem buildEffect;
     public ParticleSystem completeEffect;
 
-    [Header("Progress Bar - Frame Animation")]
-    public Sprite[] progressBarFrames; // Ваши 10 PNG кадров
-    public float frameRate = 10f; // Скорость анимации (кадров в секунду)
-
-    [Header("Progress Bar - Fill Settings")]
-    public Transform fillTransform; // Transform объекта Fill
+    [Header("Progress Bar Settings")]
+    public Transform progressBarParent;
+    public Sprite[] progressBarFrames;
+    public float frameRate = 10f;
     public Color startColor = Color.red;
     public Color endColor = Color.green;
 
@@ -32,10 +32,26 @@ public class ConstructionSite : MonoBehaviour
 
     void Start()
     {
+        // Вызываем базовый метод Building.Start()
+        base.Start();
+
         spriteRenderer = GetComponent<SpriteRenderer>();
         if (spriteRenderer == null)
         {
             spriteRenderer = gameObject.AddComponent<SpriteRenderer>();
+        }
+
+        // Автоматически находим все точки входа среди дочерних объектов (если не заданы)
+        if (entryPoints == null || entryPoints.Count == 0)
+        {
+            entryPoints = new List<EntryPoint>(GetComponentsInChildren<EntryPoint>());
+        }
+
+        // Связываем точки с этим зданием
+        foreach (var point in entryPoints)
+        {
+            if (point != null)
+                point.parentBuilding = this;
         }
 
         InitializeProgressBar();
@@ -44,7 +60,6 @@ public class ConstructionSite : MonoBehaviour
 
     void Update()
     {
-        // Обновляем анимацию рамки если прогресс-бар активен
         if (isProgressBarActive && progressBarFrames != null && progressBarFrames.Length > 0)
         {
             frameTimer += Time.deltaTime;
@@ -52,42 +67,35 @@ public class ConstructionSite : MonoBehaviour
             {
                 frameTimer = 0f;
                 currentFrame = (currentFrame + 1) % progressBarFrames.Length;
-                frameRenderer.sprite = progressBarFrames[currentFrame];
+                if (frameRenderer != null)
+                    frameRenderer.sprite = progressBarFrames[currentFrame];
             }
         }
     }
 
     private void InitializeProgressBar()
     {
-        // Находим компоненты Frame и Fill среди дочерних объектов
-        Transform progressBarTransform = transform.Find("ConstructionProgressBar");
-
-        if (progressBarTransform != null)
+        if (progressBarParent == null)
         {
-            // Ищем Frame
-            Transform frameTransform = progressBarTransform.Find("Frame");
+            Transform barTransform = transform.Find("ConstructionProgressBar");
+            if (barTransform != null)
+                progressBarParent = barTransform;
+        }
+
+        if (progressBarParent != null)
+        {
+            Transform frameTransform = progressBarParent.Find("Frame");
             if (frameTransform != null)
-            {
                 frameRenderer = frameTransform.GetComponent<SpriteRenderer>();
-            }
 
-            // Ищем Fill
-            Transform fillTransformObj = progressBarTransform.Find("Fill");
-            if (fillTransformObj != null)
+            Transform fillTransform = progressBarParent.Find("Fill");
+            if (fillTransform != null)
             {
-                fillTransform = fillTransformObj;
                 fillRenderer = fillTransform.GetComponent<SpriteRenderer>();
-
-                // Изначально скрываем заполнение
                 UpdateFillProgress(0f);
             }
 
-            // Изначально скрываем весь прогресс-бар
-            progressBarTransform.gameObject.SetActive(false);
-        }
-        else
-        {
-            Debug.LogWarning("Не найден объект ConstructionProgressBar среди дочерних объектов!");
+            progressBarParent.gameObject.SetActive(false);
         }
     }
 
@@ -96,14 +104,112 @@ public class ConstructionSite : MonoBehaviour
         return !isComplete && deliveredPlanks < requiredPlanks;
     }
 
-    public void DeliverPlank()
+    // Переопределяем метод из Building для поиска ближайшей свободной точки входа
+    public override EntryPoint GetNearestFreeEntryPoint(Vector3 unitPosition)
     {
-        if (isComplete) return;
+        if (entryPoints == null || entryPoints.Count == 0)
+            return null;
 
+        // Сортируем точки по расстоянию и выбираем первую свободную
+        var freePoints = entryPoints.Where(p => p != null && !p.isOccupied).ToList();
+
+        if (freePoints.Count == 0)
+            return null;
+
+        // Находим ближайшую
+        EntryPoint nearest = null;
+        float minDistance = float.MaxValue;
+
+        foreach (var point in freePoints)
+        {
+            float distance = Vector3.Distance(unitPosition, point.transform.position);
+            if (distance < minDistance)
+            {
+                minDistance = distance;
+                nearest = point;
+            }
+        }
+
+        return nearest;
+    }
+
+    // Основной метод для взаимодействия (вызывается из UnitAI)
+    public override void Interact(UnitAI unit, EntryPoint usedEntryPoint)
+    {
+        if (unit == null)
+        {
+            usedEntryPoint?.Vacate();
+            return;
+        }
+
+        // Сначала проверяем, есть ли доска у юнита
+        if (!unit.HasPlank)
+        {
+            Debug.LogWarning($"Юнит {unit.name} пришёл на стройку без доски!");
+            usedEntryPoint?.Vacate();
+            unit.FindJob();
+            return;
+        }
+
+        if (isComplete)
+        {
+            Debug.Log("Стройка уже завершена");
+            usedEntryPoint?.Vacate();
+            unit.FindJob();
+            return;
+        }
+
+        // Если все проверки пройдены - принимаем доску
+        StartCoroutine(DeliverPlankRoutine(unit, usedEntryPoint));
+    }
+
+    private IEnumerator DeliverPlankRoutine(UnitAI unit, EntryPoint usedEntryPoint)
+    {
+        // Защита от повторных вызовов
+        if (unit == null || usedEntryPoint == null)
+        {
+            Debug.LogError("DeliverPlankRoutine: unit или usedEntryPoint null");
+            yield break;
+        }
+
+        // Дополнительная проверка наличия доски
+        if (!unit.HasPlank)
+        {
+            Debug.LogError($"DeliverPlankRoutine: У юнита {unit.name} нет доски в начале корутины!");
+            usedEntryPoint?.Vacate();
+            unit.FindJob();
+            yield break;
+        }
+
+        Debug.Log($"DeliverPlankRoutine: Юнит {unit.name} начал сдачу доски. Доска есть: {unit.HasPlank}");
+
+        // Небольшая пауза для анимации сдачи доски
+        yield return new WaitForSeconds(0.3f);
+
+        // Проверяем, не завершена ли стройка
+        if (deliveredPlanks >= requiredPlanks)
+        {
+            Debug.Log("Стройка уже завершена, доска не принята");
+            usedEntryPoint?.Vacate();
+            unit.FindJob();
+            yield break;
+        }
+
+        // Проверяем, есть ли доска после паузы
+        if (!unit.HasPlank)
+        {
+            Debug.LogError($"DeliverPlankRoutine: У юнита {unit.name} пропала доска во время паузы!");
+            usedEntryPoint?.Vacate();
+            unit.FindJob();
+            yield break;
+        }
+
+        // Принимаем доску
         deliveredPlanks++;
-        Debug.Log($"Доставлена доска: {deliveredPlanks}/{requiredPlanks}");
+        unit.SetHasPlank(false); // Убираем доску у юнита
+        Debug.Log($"Доставлена доска: {deliveredPlanks}/{requiredPlanks} от юнита {unit.name}");
 
-        // Активируем прогресс-бар при первой доставке
+        // Визуальные эффекты
         if (deliveredPlanks == 1)
         {
             ShowProgressBar();
@@ -117,18 +223,51 @@ public class ConstructionSite : MonoBehaviour
             buildEffect.Play();
         }
 
+        // Проверка завершения стройки
+        bool completedNow = false;
         if (deliveredPlanks >= requiredPlanks)
         {
+            completedNow = true;
             CompleteConstruction();
         }
+
+        // Освобождаем точку входа
+        usedEntryPoint?.Vacate();
+
+        // Определяем дальнейшие действия юнита
+        if (!completedNow && NeedsPlanks())
+        {
+            Debug.Log($"Юнит {unit.name} идет за следующей доской");
+            Storage storage = FindObjectOfType<Storage>();
+            if (storage != null)
+            {
+                unit.GoToStorage(storage);
+            }
+            else
+            {
+                unit.FindJob();
+            }
+        }
+        else
+        {
+            Debug.Log($"Юнит {unit.name} ищет новую работу");
+            unit.FindJob();
+        }
+    }
+
+    private IEnumerator CompleteAndRelease(UnitAI unit, EntryPoint usedEntryPoint)
+    {
+        usedEntryPoint?.Vacate();
+        if (unit != null)
+            unit.FindJob();
+        yield return null;
     }
 
     private void ShowProgressBar()
     {
-        Transform progressBarTransform = transform.Find("ConstructionProgressBar");
-        if (progressBarTransform != null)
+        if (progressBarParent != null)
         {
-            progressBarTransform.gameObject.SetActive(true);
+            progressBarParent.gameObject.SetActive(true);
             isProgressBarActive = true;
         }
     }
@@ -136,35 +275,28 @@ public class ConstructionSite : MonoBehaviour
     private void UpdateProgressBar()
     {
         float progress = (float)deliveredPlanks / requiredPlanks;
+        Debug.Log($"Progress: {deliveredPlanks}/{requiredPlanks} = {progress}");
         UpdateFillProgress(progress);
-
-        // Дополнительные эффекты при изменении прогресса
         StartCoroutine(FillAnimation());
     }
 
     private void UpdateFillProgress(float progress)
     {
-        if (fillTransform != null)
+        if (fillRenderer != null)
         {
-            // Масштабируем заполнение по X от 0 до 1
-            Vector3 newScale = fillTransform.localScale;
-            newScale.x = progress;
-            fillTransform.localScale = newScale;
+            Vector3 newScale = fillRenderer.transform.localScale;
+            newScale.x = Mathf.Clamp01(progress);
+            fillRenderer.transform.localScale = newScale;
 
-            // Изменяем цвет заполнения
-            if (fillRenderer != null)
-            {
-                fillRenderer.color = Color.Lerp(startColor, endColor, progress);
-            }
+            fillRenderer.color = Color.Lerp(startColor, endColor, progress);
         }
     }
 
     private IEnumerator FillAnimation()
     {
-        if (fillTransform == null) yield break;
+        if (fillRenderer == null) yield break;
 
-        // Небольшая анимация "пульса" при заполнении
-        Vector3 originalScale = fillTransform.localScale;
+        Vector3 originalScale = fillRenderer.transform.localScale;
         Vector3 pulseScale = originalScale * 1.1f;
 
         float duration = 0.15f;
@@ -174,7 +306,7 @@ public class ConstructionSite : MonoBehaviour
         while (timer < duration)
         {
             timer += Time.deltaTime;
-            fillTransform.localScale = Vector3.Lerp(originalScale, pulseScale, timer / duration);
+            fillRenderer.transform.localScale = Vector3.Lerp(originalScale, pulseScale, timer / duration);
             yield return null;
         }
 
@@ -183,40 +315,40 @@ public class ConstructionSite : MonoBehaviour
         while (timer < duration)
         {
             timer += Time.deltaTime;
-            fillTransform.localScale = Vector3.Lerp(pulseScale, originalScale, timer / duration);
+            fillRenderer.transform.localScale = Vector3.Lerp(pulseScale, originalScale, timer / duration);
             yield return null;
         }
 
-        fillTransform.localScale = originalScale;
+        fillRenderer.transform.localScale = originalScale;
     }
 
     private void UpdateConstructionSprite()
     {
-        if (constructionSprites == null || constructionSprites.Length != 5)
+        if (constructionSprites == null || constructionSprites.Length == 0)
         {
-            Debug.LogWarning("Не настроены спрайты строительства!");
             return;
         }
 
-        int stage = Mathf.FloorToInt((float)deliveredPlanks / requiredPlanks * 4);
-        stage = Mathf.Clamp(stage, 0, 4);
-        spriteRenderer.sprite = constructionSprites[stage];
+        int stage = Mathf.FloorToInt((float)deliveredPlanks / requiredPlanks * (constructionSprites.Length - 1));
+        stage = Mathf.Clamp(stage, 0, constructionSprites.Length - 1);
+
+        if (spriteRenderer != null)
+        {
+            spriteRenderer.sprite = constructionSprites[stage];
+        }
     }
 
     private void CompleteConstruction()
     {
         isComplete = true;
 
-        // Устанавливаем финальный спрайт
-        if (constructionSprites != null && constructionSprites.Length >= 5)
+        if (constructionSprites != null && constructionSprites.Length > 0)
         {
-            spriteRenderer.sprite = constructionSprites[4];
+            spriteRenderer.sprite = constructionSprites[constructionSprites.Length - 1];
         }
 
-        // Скрываем прогресс-бар с анимацией
         StartCoroutine(HideProgressBar());
 
-        // Эффект завершения
         if (completeEffect != null)
         {
             completeEffect.Play();
@@ -228,22 +360,13 @@ public class ConstructionSite : MonoBehaviour
 
     private IEnumerator HideProgressBar()
     {
-        Transform progressBarTransform = transform.Find("ConstructionProgressBar");
-        if (progressBarTransform == null) yield break;
+        if (progressBarParent == null) yield break;
 
-        // Плавное исчезновение
         float fadeDuration = 1f;
         float timer = 0f;
 
-        if (frameRenderer != null)
-        {
-            Color frameColor = frameRenderer.color;
-        }
-
-        if (fillRenderer != null)
-        {
-            Color fillColor = fillRenderer.color;
-        }
+        Color frameStartColor = frameRenderer != null ? frameRenderer.color : Color.white;
+        Color fillStartColor = fillRenderer != null ? fillRenderer.color : Color.white;
 
         while (timer < fadeDuration)
         {
@@ -251,27 +374,46 @@ public class ConstructionSite : MonoBehaviour
             float alpha = Mathf.Lerp(1f, 0f, timer / fadeDuration);
 
             if (frameRenderer != null)
-                frameRenderer.color = new Color(1, 1, 1, alpha);
+                frameRenderer.color = new Color(frameStartColor.r, frameStartColor.g, frameStartColor.b, alpha);
 
             if (fillRenderer != null)
-                fillRenderer.color = new Color(fillRenderer.color.r, fillRenderer.color.g, fillRenderer.color.b, alpha);
+                fillRenderer.color = new Color(fillStartColor.r, fillStartColor.g, fillStartColor.b, alpha);
 
             yield return null;
         }
 
-        progressBarTransform.gameObject.SetActive(false);
+        progressBarParent.gameObject.SetActive(false);
     }
 
-    // Визуализация в редакторе для помощи в настройке
-    void OnDrawGizmos()
+    // Визуализация в редакторе
+    private void OnDrawGizmos()
     {
-        if (!Application.isPlaying)
+        // Рисуем точки входа
+        if (entryPoints != null)
         {
-            // Показываем позицию прогресс-бара в редакторе
+            foreach (var point in entryPoints)
+            {
+                if (point != null)
+                {
+                    Gizmos.color = point.isOccupied ? Color.red : Color.green;
+                    Gizmos.DrawSphere(point.transform.position, 0.2f);
+                }
+            }
+        }
+
+        // Рисуем позицию прогресс-бара
+        if (progressBarParent != null)
+        {
             Gizmos.color = Color.yellow;
-            Vector3 progressBarPos = transform.position + Vector3.up * 2f;
-            Gizmos.DrawWireCube(progressBarPos, new Vector3(1, 0.3f, 0));
-            Gizmos.DrawIcon(progressBarPos, "ProgressBar Icon");
+            Vector3 barPos = progressBarParent.position;
+            Gizmos.DrawWireCube(barPos, new Vector3(1f, 0.3f, 0f));
+        }
+        else
+        {
+            Gizmos.color = Color.yellow;
+            Vector3 barPos = transform.position + Vector3.up * 2f;
+            Gizmos.DrawWireCube(barPos, new Vector3(1f, 0.3f, 0f));
+            Gizmos.DrawIcon(barPos, "ProgressBar Icon", true);
         }
     }
 }

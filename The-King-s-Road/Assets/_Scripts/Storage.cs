@@ -1,7 +1,7 @@
 using UnityEngine;
 using System.Collections;
 
-public class Storage : MonoBehaviour
+public class Storage : Building  // Добавили : Building
 {
     public int planks = 5;
 
@@ -10,10 +10,15 @@ public class Storage : MonoBehaviour
     public Transform exitPoint; // Точка выхода (откуда появляться)
     public float interactionTime = 1f; // Время "внутри" здания
 
-    [Header("Collision Settings")]
-    public Collider2D buildingCollider; // Коллайдер здания
+    // buildingCollider уже есть в базовом классе Building!
+    // public Collider2D buildingCollider; // Эту строку УДАЛИ!
 
     private bool isUnitInside = false;
+
+    void Start()
+    {
+        base.Start(); // Вызываем базовый метод Building.Start()
+    }
 
     public bool TakePlank()
     {
@@ -42,8 +47,25 @@ public class Storage : MonoBehaviour
         return exitPoint != null ? exitPoint.position : doorPoint != null ? doorPoint.position : transform.position;
     }
 
+    // Реализуем абстрактный метод из Building
+    public override void Interact(UnitAI unit, EntryPoint usedEntryPoint)
+    {
+        // Для склада используем старую логику, но с проверкой точки входа
+        Debug.Log($"Storage.Interact вызван с точкой входа: {usedEntryPoint?.name}");
+
+        if (usedEntryPoint != null)
+        {
+            StartCoroutine(EnterAndTakePlank(unit, usedEntryPoint));
+        }
+        else
+        {
+            Debug.LogError("Storage.Interact: usedEntryPoint = null!");
+            unit.FindJob();
+        }
+    }
+
     // Юнит входит, берет доску и выходит
-    public IEnumerator EnterAndTakePlank(UnitAI unit)
+    public IEnumerator EnterAndTakePlank(UnitAI unit, EntryPoint usedEntryPoint)
     {
         Debug.Log("=== НАЧАЛО ВХОДА В СКЛАД ===");
 
@@ -59,14 +81,9 @@ public class Storage : MonoBehaviour
         Vector3 posBefore = unit.transform.position;
         Debug.Log($"Позиция юнита ДО входа: {posBefore}");
 
-        //ВАЖНО: Не отключаем GameObject, только рендерер и коллайдер
+        // ВАЖНО: Не отключаем GameObject, только рендерер и коллайдер
         SpriteRenderer unitRenderer = unit.GetComponent<SpriteRenderer>();
         Collider2D unitCollider = unit.GetComponent<Collider2D>();
-
-        // Сохраняем состояние доски
-        bool plankWasVisible = false;
-        if (unit.plankVisual != null)
-            plankWasVisible = unit.plankVisual.activeSelf;
 
         // Отключаем визуал и коллизию юнита
         if (unitRenderer != null) unitRenderer.enabled = false;
@@ -114,6 +131,9 @@ public class Storage : MonoBehaviour
             unit.plankVisual.SetActive(true);
 
         Debug.Log($"Юнит СНОВА ВИДИМ на позиции: {unit.transform.position}");
+
+        // Освобождаем точку входа
+        usedEntryPoint?.Vacate();
 
         // Небольшая задержка перед включением коллайдера здания
         yield return new WaitForSeconds(0.3f);

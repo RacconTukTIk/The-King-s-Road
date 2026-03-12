@@ -38,6 +38,7 @@ Transform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!212 &5523451610272660490
 SpriteRenderer:
+  serializedVersion: 2
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
@@ -83,6 +84,7 @@ SpriteRenderer:
   m_SortingLayerID: -1010939569
   m_SortingLayer: 3
   m_SortingOrder: 1
+  m_MaskInteraction: 0
   m_Sprite: {fileID: -7385936556723163622, guid: e849cac40dce37e4fa2836d864358792, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
@@ -92,7 +94,6 @@ SpriteRenderer:
   m_AdaptiveModeThreshold: 0.5
   m_SpriteTileMode: 0
   m_WasSpriteAssigned: 1
-  m_MaskInteraction: 0
   m_SpriteSortPoint: 0
 --- !u!95 &6251648754133006455
 Animator:
@@ -208,5 +209,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 64
   raycastDistance: 1.5
-  avoidanceForce: 5
   stopDistance: 0.3
+  footstepInterval: 0.5
+  footstepVolume: 0.3
+  plankVisual: {fileID: 0}

@@ -23,7 +23,9 @@ public class UnitAI : MonoBehaviour
     private Storage storage;
     private ConstructionSite currentSite;
     private bool hasPlank = false;
-    private bool isMovingToDoor = false;
+
+    // Переменная для точки входа
+    private EntryPoint targetEntryPoint;
 
     // Для управления анимациями
     private float idleTimer = 0f;
@@ -32,7 +34,6 @@ public class UnitAI : MonoBehaviour
     [Header("Collision Avoidance")]
     public LayerMask obstacleLayer;
     public float raycastDistance = 1.5f;
-    public float avoidanceForce = 5f;
     public float stopDistance = 0.3f;
 
     [Header("Footstep Audio")]
@@ -43,14 +44,33 @@ public class UnitAI : MonoBehaviour
     [Header("Plank Visual")]
     public GameObject plankVisual;
 
+    // Rigidbody2D компонент
+    private Rigidbody2D rb;
+
+    // Public property для доступа к hasPlank
+    public bool HasPlank
+    {
+        get { return hasPlank; }
+    }
+
     void Start()
     {
         animator = GetComponent<Animator>();
         mainCamera = Camera.main;
 
+        // Получаем Rigidbody2D
+        rb = GetComponent<Rigidbody2D>();
+        if (rb == null)
+        {
+            Debug.LogError("Rigidbody2D не найден на юните! Добавьте компонент Rigidbody2D.");
+        }
+
         SpriteRenderer sr = GetComponent<SpriteRenderer>();
-        objectWidth = sr.bounds.extents.x;
-        objectHeight = sr.bounds.extents.y;
+        if (sr != null)
+        {
+            objectWidth = sr.bounds.extents.x;
+            objectHeight = sr.bounds.extents.y;
+        }
 
         storage = FindObjectOfType<Storage>();
 
@@ -79,7 +99,7 @@ public class UnitAI : MonoBehaviour
 
         if (currentState == UnitState.MovingToStorage || currentState == UnitState.MovingToSite)
         {
-            MoveToTargetWithAvoidance();
+            MoveToTarget();
         }
     }
 
@@ -133,12 +153,19 @@ public class UnitAI : MonoBehaviour
         }
     }
 
-    void MoveToTargetWithAvoidance()
+    // Метод для остановки движения
+    void StopMoving()
+    {
+        if (rb != null) rb.velocity = Vector2.zero;
+        SetIdleAnimation();
+    }
+
+    void MoveToTarget()
     {
         Vector3 directionToTarget = (targetPosition - transform.position).normalized;
         float distanceToTarget = Vector3.Distance(transform.position, targetPosition);
 
-        // Если цель - дверь склада, игнорируем коллайдер этого склада
+        // Игнорируем коллайдер склада
         bool ignoreStorageCollider = false;
         if (currentState == UnitState.MovingToStorage && storage != null)
         {
@@ -148,9 +175,27 @@ public class UnitAI : MonoBehaviour
             }
         }
 
+        // Игнорируем коллайдер стройки, если идем к точке входа
+        bool ignoreSiteCollider = false;
+        if (currentState == UnitState.MovingToSite && currentSite != null && targetEntryPoint != null)
+        {
+            if (Vector3.Distance(targetPosition, targetEntryPoint.transform.position) < 0.1f)
+            {
+                ignoreSiteCollider = true;
+            }
+        }
+
         RaycastHit2D hit = Physics2D.Raycast(transform.position, directionToTarget, raycastDistance, obstacleLayer);
 
+        // Игнорируем коллайдер склада
         if (ignoreStorageCollider && hit.collider != null && hit.collider.gameObject == storage.gameObject)
+        {
+            Physics2D.IgnoreCollision(GetComponent<Collider2D>(), hit.collider, true);
+            hit = new RaycastHit2D();
+        }
+
+        // Игнорируем коллайдер стройки
+        if (ignoreSiteCollider && hit.collider != null && hit.collider.gameObject == currentSite.gameObject)
         {
             Physics2D.IgnoreCollision(GetComponent<Collider2D>(), hit.collider, true);
             hit = new RaycastHit2D();
@@ -166,23 +211,32 @@ public class UnitAI : MonoBehaviour
 
             if (finalDirection == Vector3.zero)
             {
-                SetIdleAnimation();
+                StopMoving();
                 StartCoroutine(WaitAndRetry());
                 return;
             }
         }
 
+        // Движение с использованием Rigidbody2D
         if (distanceToTarget > stopDistance)
         {
-            transform.position += finalDirection * movementSpeed * Time.deltaTime;
+            if (rb != null)
+            {
+                rb.velocity = finalDirection * movementSpeed;
+            }
+            else
+            {
+                transform.position += finalDirection * movementSpeed * Time.deltaTime;
+            }
             SetWalkAnimation();
         }
         else
         {
-            SetIdleAnimation();
+            StopMoving();
             OnReachedDestination();
         }
 
+        // Поворот спрайта
         float xDifference = targetPosition.x - transform.position.x;
         if (Mathf.Abs(xDifference) > directionThreshold)
         {
@@ -237,7 +291,11 @@ public class UnitAI : MonoBehaviour
 
     IEnumerator WaitAndRetry()
     {
+        StopMoving();
+
+        isWaiting = true;
         yield return new WaitForSeconds(2f);
+        isWaiting = false;
 
         if (currentState == UnitState.MovingToStorage || currentState == UnitState.MovingToSite)
         {
@@ -266,29 +324,44 @@ public class UnitAI : MonoBehaviour
 
     IEnumerator EnterStorage()
     {
+        StopMoving();
         currentState = UnitState.EnteringBuilding;
         SetIdleAnimation();
 
         Debug.Log("Подошел к двери, захожу внутрь...");
 
-        // Важно: сохраняем ссылку
         var currentStorage = storage;
         var currentSiteRef = currentSite;
+        var currentEntryPoint = targetEntryPoint;
 
-        Debug.Log($"Запускаю корутину склада. Склад: {currentStorage}, Стройка: {currentSiteRef}");
+        Debug.Log($"Запускаю корутину склада. Склад: {currentStorage}, Стройка: {currentSiteRef}, Точка входа: {currentEntryPoint?.name}");
 
-        yield return StartCoroutine(currentStorage.EnterAndTakePlank(this));
+        yield return StartCoroutine(currentStorage.EnterAndTakePlank(this, currentEntryPoint));
 
-        // ⚠️ Этот лог должен появиться после завершения корутины склада
         Debug.Log($"Корутина склада завершена. hasPlank = {hasPlank}");
 
         if (hasPlank)
         {
             Debug.Log("Вышел со склада с доской, иду к стройке");
             currentState = UnitState.MovingToSite;
+
             if (currentSiteRef != null)
             {
-                targetPosition = currentSiteRef.transform.position;
+                EntryPoint nearestPoint = currentSiteRef.GetNearestFreeEntryPoint(transform.position);
+
+                if (nearestPoint != null && nearestPoint.TryOccupy())
+                {
+                    targetEntryPoint = nearestPoint;
+                    targetPosition = nearestPoint.transform.position;
+                    Debug.Log($"Иду к точке входа: {nearestPoint.name}");
+                }
+                else
+                {
+                    targetEntryPoint = null;
+                    targetPosition = currentSiteRef.transform.position;
+                    Debug.Log("Нет свободных точек входа, иду к центру стройки");
+                }
+
                 SetWalkAnimation();
             }
             else
@@ -308,38 +381,62 @@ public class UnitAI : MonoBehaviour
 
     void OnReachedSite()
     {
+        StopMoving();
+        Debug.Log($"OnReachedSite: hasPlank={hasPlank}, currentSite={currentSite?.name}");
+
         if (hasPlank && currentSite != null)
         {
-            currentSite.DeliverPlank();
-            hasPlank = false;
+            var site = currentSite;
+            var entryPoint = targetEntryPoint;
+            targetEntryPoint = null;
 
-            if (plankVisual != null)
-                plankVisual.SetActive(false);
-
-            if (currentSite.NeedsPlanks())
+            if (entryPoint != null)
             {
-                currentState = UnitState.MovingToStorage;
-                targetPosition = storage.GetDoorPosition();
-                SetWalkAnimation();
+                Debug.Log($"Иду к точке {entryPoint.name} для сдачи доски");
+                site.Interact(this, entryPoint);
             }
             else
             {
-                currentSite = null;
-                currentState = UnitState.Idle;
-                SetIdleAnimation();
-                FindJob();
+                EntryPoint nearestPoint = site.GetNearestFreeEntryPoint(transform.position);
+                if (nearestPoint != null && nearestPoint.TryOccupy())
+                {
+                    Debug.Log($"Нашел ближайшую точку {nearestPoint.name}");
+                    site.Interact(this, nearestPoint);
+                }
+                else
+                {
+                    Debug.Log("Все точки входа заняты, жду...");
+                    StartCoroutine(WaitAndRetrySite());
+                }
             }
         }
+        else
+        {
+            Debug.LogWarning($"Юнит {gameObject.name} пришел на стройку без доски или стройка не найдена");
+            FindJob();
+        }
+    }
+
+    IEnumerator WaitAndRetrySite()
+    {
+        currentState = UnitState.Idle;
+        SetIdleAnimation();
+
+        yield return new WaitForSeconds(2f);
+
+        OnReachedSite();
     }
 
     IEnumerator WaitAndRetryStorage()
     {
+        StopMoving();
         yield return new WaitForSeconds(3f);
 
         if (storage != null)
         {
             currentState = UnitState.MovingToStorage;
             targetPosition = storage.GetDoorPosition();
+            targetEntryPoint = null;
             SetWalkAnimation();
         }
         else
@@ -350,8 +447,10 @@ public class UnitAI : MonoBehaviour
         }
     }
 
-    void FindJob()
+    public void FindJob()
     {
+        StopMoving();
+
         ConstructionSite[] sites = FindObjectsOfType<ConstructionSite>();
 
         foreach (ConstructionSite site in sites)
@@ -361,6 +460,7 @@ public class UnitAI : MonoBehaviour
                 currentSite = site;
                 currentState = UnitState.MovingToStorage;
                 targetPosition = storage.GetDoorPosition();
+                targetEntryPoint = null;
                 SetWalkAnimation();
                 Debug.Log("Нашел работу, иду к двери склада");
                 return;
@@ -368,6 +468,16 @@ public class UnitAI : MonoBehaviour
         }
 
         StartWandering();
+    }
+
+    public void GoToStorage(Storage targetStorage)
+    {
+        storage = targetStorage;
+        currentState = UnitState.MovingToStorage;
+        targetPosition = storage.GetDoorPosition();
+        targetEntryPoint = null;
+        SetWalkAnimation();
+        Debug.Log("Иду к складу за доской");
     }
 
     void StartWandering()
@@ -379,6 +489,8 @@ public class UnitAI : MonoBehaviour
 
     void GetNewTarget()
     {
+        if (mainCamera == null) return;
+
         Vector3 screenBounds = mainCamera.ScreenToWorldPoint(new Vector3(Screen.width, Screen.height, mainCamera.nearClipPlane));
 
         float minX = mainCamera.transform.position.x - screenBounds.x + objectWidth;
@@ -399,11 +511,12 @@ public class UnitAI : MonoBehaviour
 
     IEnumerator MoveToWanderTarget()
     {
+        currentState = UnitState.MovingToSite;
         SetWalkAnimation();
 
         while (Vector3.Distance(transform.position, targetPosition) > stopDistance)
         {
-            if (currentState != UnitState.Idle)
+            if (currentState != UnitState.MovingToSite)
                 yield break;
 
             Vector3 direction = (targetPosition - transform.position).normalized;
@@ -415,7 +528,14 @@ public class UnitAI : MonoBehaviour
                 Vector3 avoidDirection = GetAvoidanceDirection(direction, hit);
                 if (avoidDirection != Vector3.zero)
                 {
-                    transform.position += avoidDirection * movementSpeed * Time.deltaTime;
+                    if (rb != null)
+                    {
+                        rb.velocity = avoidDirection * movementSpeed;
+                    }
+                    else
+                    {
+                        transform.position += avoidDirection * movementSpeed * Time.deltaTime;
+                    }
                 }
                 else
                 {
@@ -425,7 +545,14 @@ public class UnitAI : MonoBehaviour
             }
             else
             {
-                transform.position += direction * movementSpeed * Time.deltaTime;
+                if (rb != null)
+                {
+                    rb.velocity = direction * movementSpeed;
+                }
+                else
+                {
+                    transform.position += direction * movementSpeed * Time.deltaTime;
+                }
             }
 
             float xDifference = targetPosition.x - transform.position.x;
@@ -437,6 +564,7 @@ public class UnitAI : MonoBehaviour
             yield return null;
         }
 
+        StopMoving();
         SetIdleAnimation();
         SwitchIdleVariant();
 
@@ -467,6 +595,8 @@ public class UnitAI : MonoBehaviour
 
         if (plankVisual != null)
             plankVisual.SetActive(value);
+
+        Debug.Log($"UnitAI.SetHasPlank: hasPlank = {value} для юнита {gameObject.name}");
     }
 
     void OnDestroy()
@@ -479,6 +609,11 @@ public class UnitAI : MonoBehaviour
             {
                 Physics2D.IgnoreCollision(unitCollider, storageCollider, false);
             }
+        }
+
+        if (targetEntryPoint != null)
+        {
+            targetEntryPoint.Vacate();
         }
     }
 }
