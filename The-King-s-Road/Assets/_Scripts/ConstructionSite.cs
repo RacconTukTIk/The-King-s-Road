@@ -30,9 +30,18 @@ public class ConstructionSite : Building
     private float frameTimer = 0f;
     private bool isProgressBarActive = false;
 
+    [Header("Building Completion")]
+    [Tooltip("Имя скрипта готового здания (например: 'Warehouse', 'Tavern')")]
+    public string finishedBuildingScriptName = "Tavern"; // Меняем на Tavern
+
+    [Tooltip("Сохранять ли точки входа после завершения")]
+    public bool keepEntryPoints = true;
+
+    [Tooltip("Сохранять ли коллайдер")]
+    public bool keepCollider = true;
+
     void Start()
     {
-        // Вызываем базовый метод Building.Start()
         base.Start();
 
         spriteRenderer = GetComponent<SpriteRenderer>();
@@ -41,13 +50,11 @@ public class ConstructionSite : Building
             spriteRenderer = gameObject.AddComponent<SpriteRenderer>();
         }
 
-        // Автоматически находим все точки входа среди дочерних объектов (если не заданы)
         if (entryPoints == null || entryPoints.Count == 0)
         {
             entryPoints = new List<EntryPoint>(GetComponentsInChildren<EntryPoint>());
         }
 
-        // Связываем точки с этим зданием
         foreach (var point in entryPoints)
         {
             if (point != null)
@@ -104,19 +111,16 @@ public class ConstructionSite : Building
         return !isComplete && deliveredPlanks < requiredPlanks;
     }
 
-    // Переопределяем метод из Building для поиска ближайшей свободной точки входа
     public override EntryPoint GetNearestFreeEntryPoint(Vector3 unitPosition)
     {
         if (entryPoints == null || entryPoints.Count == 0)
             return null;
 
-        // Сортируем точки по расстоянию и выбираем первую свободную
         var freePoints = entryPoints.Where(p => p != null && !p.isOccupied).ToList();
 
         if (freePoints.Count == 0)
             return null;
 
-        // Находим ближайшую
         EntryPoint nearest = null;
         float minDistance = float.MaxValue;
 
@@ -133,7 +137,6 @@ public class ConstructionSite : Building
         return nearest;
     }
 
-    // Основной метод для взаимодействия (вызывается из UnitAI)
     public override void Interact(UnitAI unit, EntryPoint usedEntryPoint)
     {
         if (unit == null)
@@ -142,7 +145,6 @@ public class ConstructionSite : Building
             return;
         }
 
-        // Сначала проверяем, есть ли доска у юнита
         if (!unit.HasPlank)
         {
             Debug.LogWarning($"Юнит {unit.name} пришёл на стройку без доски!");
@@ -159,20 +161,17 @@ public class ConstructionSite : Building
             return;
         }
 
-        // Если все проверки пройдены - принимаем доску
         StartCoroutine(DeliverPlankRoutine(unit, usedEntryPoint));
     }
 
     private IEnumerator DeliverPlankRoutine(UnitAI unit, EntryPoint usedEntryPoint)
     {
-        // Защита от повторных вызовов
         if (unit == null || usedEntryPoint == null)
         {
             Debug.LogError("DeliverPlankRoutine: unit или usedEntryPoint null");
             yield break;
         }
 
-        // Дополнительная проверка наличия доски
         if (!unit.HasPlank)
         {
             Debug.LogError($"DeliverPlankRoutine: У юнита {unit.name} нет доски в начале корутины!");
@@ -183,10 +182,8 @@ public class ConstructionSite : Building
 
         Debug.Log($"DeliverPlankRoutine: Юнит {unit.name} начал сдачу доски. Доска есть: {unit.HasPlank}");
 
-        // Небольшая пауза для анимации сдачи доски
         yield return new WaitForSeconds(0.3f);
 
-        // Проверяем, не завершена ли стройка
         if (deliveredPlanks >= requiredPlanks)
         {
             Debug.Log("Стройка уже завершена, доска не принята");
@@ -195,7 +192,6 @@ public class ConstructionSite : Building
             yield break;
         }
 
-        // Проверяем, есть ли доска после паузы
         if (!unit.HasPlank)
         {
             Debug.LogError($"DeliverPlankRoutine: У юнита {unit.name} пропала доска во время паузы!");
@@ -204,12 +200,10 @@ public class ConstructionSite : Building
             yield break;
         }
 
-        // Принимаем доску
         deliveredPlanks++;
-        unit.SetHasPlank(false); // Убираем доску у юнита
+        unit.SetHasPlank(false);
         Debug.Log($"Доставлена доска: {deliveredPlanks}/{requiredPlanks} от юнита {unit.name}");
 
-        // Визуальные эффекты
         if (deliveredPlanks == 1)
         {
             ShowProgressBar();
@@ -223,18 +217,15 @@ public class ConstructionSite : Building
             buildEffect.Play();
         }
 
-        // Проверка завершения стройки
         bool completedNow = false;
         if (deliveredPlanks >= requiredPlanks)
         {
             completedNow = true;
-            CompleteConstruction();
+            CompleteConstruction(); // Теперь только один метод
         }
 
-        // Освобождаем точку входа
         usedEntryPoint?.Vacate();
 
-        // Определяем дальнейшие действия юнита
         if (!completedNow && NeedsPlanks())
         {
             Debug.Log($"Юнит {unit.name} идет за следующей доской");
@@ -302,7 +293,6 @@ public class ConstructionSite : Building
         float duration = 0.15f;
         float timer = 0f;
 
-        // Увеличиваем
         while (timer < duration)
         {
             timer += Time.deltaTime;
@@ -310,7 +300,6 @@ public class ConstructionSite : Building
             yield return null;
         }
 
-        // Возвращаем
         timer = 0f;
         while (timer < duration)
         {
@@ -356,6 +345,9 @@ public class ConstructionSite : Building
 
         Debug.Log("Здание построено!");
         isProgressBarActive = false;
+
+        
+        ReplaceWithFunctionalBuilding();
     }
 
     private IEnumerator HideProgressBar()
@@ -382,13 +374,87 @@ public class ConstructionSite : Building
             yield return null;
         }
 
-        progressBarParent.gameObject.SetActive(false);
+        Destroy(progressBarParent.gameObject);
     }
 
-    // Визуализация в редакторе
+    // Метод для замены строительного скрипта на функциональный
+    private void ReplaceWithFunctionalBuilding()
+    {
+        // Сначала удаляем прогресс-бар, если он ещё есть
+        if (progressBarParent != null)
+        {
+            Destroy(progressBarParent.gameObject);
+        }
+
+        var entryPointsList = keepEntryPoints ? entryPoints : null;
+        var collider = keepCollider ? buildingCollider : null;
+        var sprite = spriteRenderer;
+
+        GameObject thisGameObject = gameObject;
+
+        // Удаляем компонент ConstructionSite
+        DestroyImmediate(this);
+
+        // Добавляем новый скрипт по имени
+        System.Type buildingType = System.Type.GetType(finishedBuildingScriptName);
+
+        if (buildingType == null)
+        {
+            buildingType = System.Type.GetType($"{finishedBuildingScriptName}, Assembly-CSharp");
+        }
+
+        if (buildingType != null && typeof(FunctionalBuilding).IsAssignableFrom(buildingType))
+        {
+            var functionalBuilding = thisGameObject.AddComponent(buildingType) as FunctionalBuilding;
+
+            if (keepEntryPoints && entryPointsList != null)
+            {
+                functionalBuilding.entryPoints = entryPointsList;
+
+                foreach (var point in functionalBuilding.entryPoints)
+                {
+                    if (point != null)
+                        point.parentBuilding = functionalBuilding;
+                }
+            }
+
+            if (keepCollider && collider != null)
+            {
+                functionalBuilding.buildingCollider = collider;
+            }
+
+            functionalBuilding.OnConstructionComplete();
+
+            Debug.Log($"Здание преобразовано в {finishedBuildingScriptName}");
+        }
+        else
+        {
+            Debug.LogError($"Скрипт {finishedBuildingScriptName} не найден! Убедитесь, что имя написано правильно.");
+
+            var defaultBuilding = thisGameObject.AddComponent<FunctionalBuilding>();
+            defaultBuilding.buildingName = "Обычное здание";
+
+            if (keepEntryPoints && entryPointsList != null)
+            {
+                defaultBuilding.entryPoints = entryPointsList;
+            }
+
+            if (keepCollider && collider != null)
+            {
+                defaultBuilding.buildingCollider = collider;
+            }
+
+            defaultBuilding.OnConstructionComplete();
+        }
+
+        if (sprite != null && constructionSprites != null && constructionSprites.Length > 0)
+        {
+            sprite.sprite = constructionSprites[constructionSprites.Length - 1];
+        }
+    }
+
     private void OnDrawGizmos()
     {
-        // Рисуем точки входа
         if (entryPoints != null)
         {
             foreach (var point in entryPoints)
@@ -401,7 +467,6 @@ public class ConstructionSite : Building
             }
         }
 
-        // Рисуем позицию прогресс-бара
         if (progressBarParent != null)
         {
             Gizmos.color = Color.yellow;

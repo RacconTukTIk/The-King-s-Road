@@ -44,6 +44,9 @@ public class UnitAI : MonoBehaviour
     [Header("Plank Visual")]
     public GameObject plankVisual;
 
+    private bool hasWood = false;
+    private int woodAmount = 0;
+
     // Rigidbody2D компонент
     private Rigidbody2D rb;
 
@@ -156,12 +159,17 @@ public class UnitAI : MonoBehaviour
     // Метод для остановки движения
     void StopMoving()
     {
-        if (rb != null) rb.velocity = Vector2.zero;
+        if (rb != null) rb.linearVelocity = Vector2.zero;
         SetIdleAnimation();
     }
 
     void MoveToTarget()
     {
+        if (currentState == UnitState.MovingToSite && targetEntryPoint != null)
+        {
+            Debug.Log($"MovingToTarget: targetEntryPoint = {targetEntryPoint.name}, parentBuilding = {targetEntryPoint.parentBuilding?.name}");
+        }
+
         Vector3 directionToTarget = (targetPosition - transform.position).normalized;
         float distanceToTarget = Vector3.Distance(transform.position, targetPosition);
 
@@ -185,6 +193,23 @@ public class UnitAI : MonoBehaviour
             }
         }
 
+        // ========== НОВЫЙ КОД: Игнорируем коллайдер лесопилки ==========
+        bool ignoreSawmillCollider = false;
+        Sawmill targetSawmill = null;
+
+        // Проверяем, идем ли мы на лесопилку
+        if (currentState == UnitState.MovingToSite && targetEntryPoint != null)
+        {
+            targetSawmill = targetEntryPoint.parentBuilding as Sawmill;
+            if (targetSawmill != null)
+            {
+                if (Vector3.Distance(targetPosition, targetEntryPoint.transform.position) < 0.1f)
+                {
+                    ignoreSawmillCollider = true;
+                }
+            }
+        }
+
         RaycastHit2D hit = Physics2D.Raycast(transform.position, directionToTarget, raycastDistance, obstacleLayer);
 
         // Игнорируем коллайдер склада
@@ -196,6 +221,13 @@ public class UnitAI : MonoBehaviour
 
         // Игнорируем коллайдер стройки
         if (ignoreSiteCollider && hit.collider != null && hit.collider.gameObject == currentSite.gameObject)
+        {
+            Physics2D.IgnoreCollision(GetComponent<Collider2D>(), hit.collider, true);
+            hit = new RaycastHit2D();
+        }
+
+        // ========== НОВЫЙ КОД: Игнорируем коллайдер лесопилки ==========
+        if (ignoreSawmillCollider && hit.collider != null && targetSawmill != null && hit.collider.gameObject == targetSawmill.gameObject)
         {
             Physics2D.IgnoreCollision(GetComponent<Collider2D>(), hit.collider, true);
             hit = new RaycastHit2D();
@@ -222,7 +254,7 @@ public class UnitAI : MonoBehaviour
         {
             if (rb != null)
             {
-                rb.velocity = finalDirection * movementSpeed;
+                rb.linearVelocity = finalDirection * movementSpeed;
             }
             else
             {
@@ -382,8 +414,25 @@ public class UnitAI : MonoBehaviour
     void OnReachedSite()
     {
         StopMoving();
-        Debug.Log($"OnReachedSite: hasPlank={hasPlank}, currentSite={currentSite?.name}");
+        Debug.Log($"OnReachedSite: hasPlank={hasPlank}, currentSite={currentSite?.name}, targetEntryPoint={targetEntryPoint?.name}");
 
+        // Проверяем, не идём ли мы на лесопилку
+        if (targetEntryPoint != null && targetEntryPoint.parentBuilding is Sawmill)
+        {
+            Sawmill sawmill = targetEntryPoint.parentBuilding as Sawmill;
+            Debug.Log($"ДОШЕЛ ДО ЛЕСОПИЛКИ! Иду на лесопилку {sawmill.name}");
+            sawmill.Interact(this, targetEntryPoint);
+            targetEntryPoint = null;
+            return;
+        }
+
+        // Если targetEntryPoint не null, но это не лесопилка
+        if (targetEntryPoint != null)
+        {
+            Debug.Log($"targetEntryPoint.parentBuilding = {targetEntryPoint.parentBuilding?.GetType().Name}");
+        }
+
+        // Обычная стройка
         if (hasPlank && currentSite != null)
         {
             var site = currentSite;
@@ -451,23 +500,112 @@ public class UnitAI : MonoBehaviour
     {
         StopMoving();
 
-        ConstructionSite[] sites = FindObjectsOfType<ConstructionSite>();
-
-        foreach (ConstructionSite site in sites)
+        // Если у юнита есть доски - ищем стройку
+        if (HasPlank)
         {
-            if (site.NeedsPlanks())
+            ConstructionSite[] sites = FindObjectsOfType<ConstructionSite>();
+            foreach (ConstructionSite site in sites)
             {
-                currentSite = site;
-                currentState = UnitState.MovingToStorage;
-                targetPosition = storage.GetDoorPosition();
-                targetEntryPoint = null;
-                SetWalkAnimation();
-                Debug.Log("Нашел работу, иду к двери склада");
-                return;
+                if (site.NeedsPlanks())
+                {
+                    currentSite = site;
+                    currentState = UnitState.MovingToSite;
+
+                    EntryPoint nearestPoint = site.GetNearestFreeEntryPoint(transform.position);
+                    if (nearestPoint != null && nearestPoint.TryOccupy())
+                    {
+                        targetEntryPoint = nearestPoint;
+                        targetPosition = nearestPoint.transform.position;
+                    }
+                    else
+                    {
+                        targetEntryPoint = null;
+                        targetPosition = site.transform.position;
+                    }
+
+                    SetWalkAnimation();
+                    Debug.Log("Есть доски, иду на стройку");
+                    return;
+                }
             }
         }
 
+        // Если нет досок, проверяем склад
+        if (storage != null && storage.planks > 0)
+        {
+            ConstructionSite[] sites = FindObjectsOfType<ConstructionSite>();
+            foreach (ConstructionSite site in sites)
+            {
+                if (site.NeedsPlanks())
+                {
+                    currentSite = site;
+                    currentState = UnitState.MovingToStorage;
+                    targetPosition = storage.GetDoorPosition();
+                    targetEntryPoint = null;
+                    SetWalkAnimation();
+                    Debug.Log("На складе есть доски, иду за ними");
+                    return;
+                }
+            }
+        }
+
+        // Если на складе нет досок - идём на лесопилку
+        Sawmill sawmill = FindObjectOfType<Sawmill>();
+        if (sawmill != null)
+        {
+            currentState = UnitState.MovingToSite;
+            currentSite = null;
+
+            // ОБЯЗАТЕЛЬНО находим точку входа и занимаем её
+            EntryPoint nearestPoint = sawmill.GetNearestFreeEntryPoint(transform.position);
+            if (nearestPoint != null)
+            {
+                if (nearestPoint.TryOccupy())
+                {
+                    targetEntryPoint = nearestPoint;
+                    targetPosition = nearestPoint.transform.position;
+                    Debug.Log($"Иду к точке входа лесопилки: {nearestPoint.name} на позиции {targetPosition}");
+                }
+                else
+                {
+                    Debug.Log("Точка входа занята, жду...");
+                    targetEntryPoint = null;
+                    targetPosition = sawmill.GetDoorPosition();
+                }
+            }
+            else
+            {
+                Debug.LogWarning("У лесопилки нет свободных точек входа!");
+                targetEntryPoint = null;
+                targetPosition = sawmill.GetDoorPosition();
+            }
+
+            SetWalkAnimation();
+            Debug.Log("На складе нет досок, иду на лесопилку");
+            return;
+        }
+
         StartWandering();
+    }
+
+    public void GoToSawmill(Sawmill targetSawmill)
+    {
+        currentState = UnitState.MovingToSite;
+
+        EntryPoint nearestPoint = targetSawmill.GetNearestFreeEntryPoint(transform.position);
+        if (nearestPoint != null && nearestPoint.TryOccupy())
+        {
+            targetEntryPoint = nearestPoint;
+            targetPosition = nearestPoint.transform.position;
+        }
+        else
+        {
+            targetEntryPoint = null;
+            targetPosition = targetSawmill.GetDoorPosition();
+        }
+
+        SetWalkAnimation();
+        Debug.Log("Иду на лесопилку");
     }
 
     public void GoToStorage(Storage targetStorage)
@@ -530,7 +668,7 @@ public class UnitAI : MonoBehaviour
                 {
                     if (rb != null)
                     {
-                        rb.velocity = avoidDirection * movementSpeed;
+                        rb.linearVelocity = avoidDirection * movementSpeed;
                     }
                     else
                     {
@@ -547,7 +685,7 @@ public class UnitAI : MonoBehaviour
             {
                 if (rb != null)
                 {
-                    rb.velocity = direction * movementSpeed;
+                    rb.linearVelocity = direction * movementSpeed;
                 }
                 else
                 {
@@ -611,9 +749,45 @@ public class UnitAI : MonoBehaviour
             }
         }
 
+        // Восстанавливаем коллизию с лесопилкой
+        Sawmill sawmill = FindObjectOfType<Sawmill>();
+        if (sawmill != null)
+        {
+            Collider2D unitCollider = GetComponent<Collider2D>();
+            Collider2D sawmillCollider = sawmill.GetComponent<Collider2D>();
+            if (unitCollider != null && sawmillCollider != null)
+            {
+                Physics2D.IgnoreCollision(unitCollider, sawmillCollider, false);
+            }
+        }
+
         if (targetEntryPoint != null)
         {
             targetEntryPoint.Vacate();
         }
     }
+
+    public bool HasWood
+    {
+        get { return hasWood; }
+    }
+
+    public int WoodAmount
+    {
+        get { return woodAmount; }
+    }
+
+    // Методы для управления бревнами
+    public void SetHasWood(bool value)
+    {
+        hasWood = value;
+        Debug.Log($"UnitAI.SetHasWood: hasWood = {value} для юнита {gameObject.name}");
+    }
+
+    public void SetWoodAmount(int amount)
+    {
+        woodAmount = amount;
+        Debug.Log($"UnitAI.SetWoodAmount: woodAmount = {amount}");
+    }
+
 }

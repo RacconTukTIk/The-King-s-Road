@@ -15,10 +15,13 @@ public abstract class Building : MonoBehaviour
             entryPoints = new List<EntryPoint>(GetComponentsInChildren<EntryPoint>());
         }
 
-        // Связываем точки с этим зданием
+        // Связываем точки с этим зданием (с проверкой на null)
         foreach (var point in entryPoints)
         {
-            point.parentBuilding = this;
+            if (point != null)  // <-- ВАЖНО: проверяем на null
+            {
+                point.parentBuilding = this;
+            }
         }
     }
 
@@ -33,7 +36,7 @@ public abstract class Building : MonoBehaviour
 
         foreach (var point in entryPoints)
         {
-            if (!point.isOccupied)
+            if (point != null && !point.isOccupied)  // <-- проверка на null
             {
                 float distance = Vector3.Distance(unitPosition, point.transform.position);
                 if (distance < minDistance)
@@ -58,4 +61,13 @@ public abstract class Building : MonoBehaviour
 
     // Абстрактный метод для взаимодействия
     public abstract void Interact(UnitAI unit, EntryPoint usedEntryPoint);
+
+    public virtual void RefreshEntryPoints()
+    {
+        foreach (var point in entryPoints)
+        {
+            if (point != null)
+                point.parentBuilding = this;
+        }
+    }
 }

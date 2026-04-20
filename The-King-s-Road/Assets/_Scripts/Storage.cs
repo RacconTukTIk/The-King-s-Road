@@ -1,7 +1,7 @@
 using UnityEngine;
 using System.Collections;
 
-public class Storage : Building  // Добавили : Building
+public class Storage : Building
 {
     public int planks = 5;
 

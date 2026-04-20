@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: dd77bd51212b9ba4498d737b974ec8ae
+guid: 6d2eb95dcb71b274cbc9f0ca0c095dd4
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: -5741499901877378232
-    second: The-King's-Road-Map._0
+      213: 8333008143902834016
+    second: Sawmill_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -100,13 +100,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: The-King's-Road-Map._0
+      name: Sawmill_0
       rect:
         serializedVersion: 2
-        x: 0
-        y: 0
-        width: 1920
-        height: 1120
+        x: 25
+        y: 102
+        width: 974
+        height: 836
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -115,8 +115,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 843a8ae42481250b0800000000000000
-      internalID: -5741499901877378232
+      spriteID: 06df3c7b1cac4a370800000000000000
+      internalID: 8333008143902834016
       vertices: []
       indices: 
       edges: []
@@ -135,7 +135,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      The-King's-Road-Map._0: -5741499901877378232
+      Sawmill_0: 8333008143902834016
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 
