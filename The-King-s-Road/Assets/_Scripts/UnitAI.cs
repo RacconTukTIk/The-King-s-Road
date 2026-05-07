@@ -23,6 +23,7 @@ public class UnitAI : MonoBehaviour
     private Storage storage;
     private ConstructionSite currentSite;
     private bool hasPlank = false;
+    private EntryPoint preferredSiteEntryPoint;
 
     // Переменная для точки входа
     private EntryPoint targetEntryPoint;
@@ -179,7 +180,8 @@ public class UnitAI : MonoBehaviour
         {
             if (Vector3.Distance(targetPosition, storage.GetDoorPosition()) < 0.1f)
             {
-                ignoreStorageCollider = true;
+                // Игнорируем коллайдер только вблизи двери, а не по всему маршруту.
+                ignoreStorageCollider = distanceToTarget <= 0.6f;
             }
         }
 
@@ -189,7 +191,8 @@ public class UnitAI : MonoBehaviour
         {
             if (Vector3.Distance(targetPosition, targetEntryPoint.transform.position) < 0.1f)
             {
-                ignoreSiteCollider = true;
+                // Пропускаем коллайдер стройки только на последнем отрезке к точке входа.
+                ignoreSiteCollider = distanceToTarget <= 0.6f;
             }
         }
 
@@ -205,7 +208,8 @@ public class UnitAI : MonoBehaviour
             {
                 if (Vector3.Distance(targetPosition, targetEntryPoint.transform.position) < 0.1f)
                 {
-                    ignoreSawmillCollider = true;
+                    // Иначе юнит может пройти через всё здание "напрямик".
+                    ignoreSawmillCollider = distanceToTarget <= 0.6f;
                 }
             }
         }
@@ -215,21 +219,18 @@ public class UnitAI : MonoBehaviour
         // Игнорируем коллайдер склада
         if (ignoreStorageCollider && hit.collider != null && hit.collider.gameObject == storage.gameObject)
         {
-            Physics2D.IgnoreCollision(GetComponent<Collider2D>(), hit.collider, true);
             hit = new RaycastHit2D();
         }
 
         // Игнорируем коллайдер стройки
         if (ignoreSiteCollider && hit.collider != null && hit.collider.gameObject == currentSite.gameObject)
         {
-            Physics2D.IgnoreCollision(GetComponent<Collider2D>(), hit.collider, true);
             hit = new RaycastHit2D();
         }
 
         // ========== НОВЫЙ КОД: Игнорируем коллайдер лесопилки ==========
         if (ignoreSawmillCollider && hit.collider != null && targetSawmill != null && hit.collider.gameObject == targetSawmill.gameObject)
         {
-            Physics2D.IgnoreCollision(GetComponent<Collider2D>(), hit.collider, true);
             hit = new RaycastHit2D();
         }
 
@@ -368,6 +369,16 @@ public class UnitAI : MonoBehaviour
 
         Debug.Log($"Запускаю корутину склада. Склад: {currentStorage}, Стройка: {currentSiteRef}, Точка входа: {currentEntryPoint?.name}");
 
+        // Если юнит уже несет доску, сначала разгружаем ее на склад.
+        if (hasPlank)
+        {
+            yield return StartCoroutine(currentStorage.EnterAndStorePlank(this, currentEntryPoint));
+            currentState = UnitState.Idle;
+            SetIdleAnimation();
+            FindJob();
+            yield break;
+        }
+
         yield return StartCoroutine(currentStorage.EnterAndTakePlank(this, currentEntryPoint));
 
         Debug.Log($"Корутина склада завершена. hasPlank = {hasPlank}");
@@ -379,19 +390,15 @@ public class UnitAI : MonoBehaviour
 
             if (currentSiteRef != null)
             {
-                EntryPoint nearestPoint = currentSiteRef.GetNearestFreeEntryPoint(transform.position);
-
-                if (nearestPoint != null && nearestPoint.TryOccupy())
+                if (TryAssignSiteEntryPoint(currentSiteRef))
                 {
-                    targetEntryPoint = nearestPoint;
-                    targetPosition = nearestPoint.transform.position;
-                    Debug.Log($"Иду к точке входа: {nearestPoint.name}");
+                    Debug.Log($"Иду к точке входа: {targetEntryPoint.name}");
                 }
                 else
                 {
-                    targetEntryPoint = null;
-                    targetPosition = currentSiteRef.transform.position;
-                    Debug.Log("Нет свободных точек входа, иду к центру стройки");
+                    Debug.Log("Нет свободных точек входа стройки, жду и повторяю");
+                    StartCoroutine(WaitAndRetrySite());
+                    yield break;
                 }
 
                 SetWalkAnimation();
@@ -446,11 +453,9 @@ public class UnitAI : MonoBehaviour
             }
             else
             {
-                EntryPoint nearestPoint = site.GetNearestFreeEntryPoint(transform.position);
-                if (nearestPoint != null && nearestPoint.TryOccupy())
+                if (TryAssignSiteEntryPoint(site))
                 {
-                    Debug.Log($"Нашел ближайшую точку {nearestPoint.name}");
-                    site.Interact(this, nearestPoint);
+                    site.Interact(this, targetEntryPoint);
                 }
                 else
                 {
@@ -472,6 +477,12 @@ public class UnitAI : MonoBehaviour
         SetIdleAnimation();
 
         yield return new WaitForSeconds(2f);
+
+        // Если за время ожидания юнит получил новую задачу, не форсим повторный вход.
+        if (currentState != UnitState.Idle || !hasPlank || currentSite == null)
+        {
+            yield break;
+        }
 
         OnReachedSite();
     }
@@ -496,31 +507,90 @@ public class UnitAI : MonoBehaviour
         }
     }
 
+    IEnumerator WaitAndRetrySawmill()
+    {
+        currentState = UnitState.Idle;
+        SetIdleAnimation();
+        yield return new WaitForSeconds(2f);
+
+        // Если за время ожидания задача изменилась, не перезаписываем её.
+        if (currentState != UnitState.Idle || hasPlank || currentSite != null)
+        {
+            yield break;
+        }
+
+        FindJob();
+    }
+
     public void FindJob()
     {
         StopMoving();
+        ReleaseReservedEntryPoint();
+        ConstructionSite[] sites = FindObjectsOfType<ConstructionSite>();
+        bool hasConstructionDemand = false;
+        foreach (ConstructionSite site in sites)
+        {
+            if (site.NeedsPlanks())
+            {
+                hasConstructionDemand = true;
+                break;
+            }
+        }
+
+        if (!hasConstructionDemand)
+        {
+            currentSite = null;
+            if (storage == null)
+            {
+                StartWandering();
+                return;
+            }
+
+            // Нет активной стройки: если доска на руках, несем ее на склад.
+            if (HasPlank)
+            {
+                currentState = UnitState.MovingToStorage;
+                targetPosition = storage.GetDoorPosition();
+                targetEntryPoint = null;
+                SetWalkAnimation();
+                Debug.Log("Строек нет, несу доску на склад");
+                return;
+            }
+
+            // Если склад не полный, пополняем его через лесопилку.
+            if (!storage.IsFull())
+            {
+                Sawmill sawmillForStorage = FindObjectOfType<Sawmill>();
+                if (sawmillForStorage != null)
+                {
+                    GoToSawmill(sawmillForStorage);
+                    return;
+                }
+
+                StartWandering();
+                return;
+            }
+
+            // Склад полный - юнит свободен.
+            StartWandering();
+            return;
+        }
 
         // Если у юнита есть доски - ищем стройку
         if (HasPlank)
         {
-            ConstructionSite[] sites = FindObjectsOfType<ConstructionSite>();
             foreach (ConstructionSite site in sites)
             {
                 if (site.NeedsPlanks())
                 {
                     currentSite = site;
                     currentState = UnitState.MovingToSite;
-
-                    EntryPoint nearestPoint = site.GetNearestFreeEntryPoint(transform.position);
-                    if (nearestPoint != null && nearestPoint.TryOccupy())
+                    if (!TryAssignSiteEntryPoint(site))
                     {
-                        targetEntryPoint = nearestPoint;
-                        targetPosition = nearestPoint.transform.position;
-                    }
-                    else
-                    {
-                        targetEntryPoint = null;
-                        targetPosition = site.transform.position;
+                        currentState = UnitState.Idle;
+                        SetIdleAnimation();
+                        StartCoroutine(WaitAndRetrySite());
+                        return;
                     }
 
                     SetWalkAnimation();
@@ -528,12 +598,23 @@ public class UnitAI : MonoBehaviour
                     return;
                 }
             }
+
+            // Строек больше нет - относим доску на склад, чтобы не зацикливаться на лесопилке.
+            if (storage != null)
+            {
+                currentSite = null;
+                currentState = UnitState.MovingToStorage;
+                targetPosition = storage.GetDoorPosition();
+                targetEntryPoint = null;
+                SetWalkAnimation();
+                Debug.Log("Несу доску на склад");
+                return;
+            }
         }
 
         // Если нет досок, проверяем склад
         if (storage != null && storage.planks > 0)
         {
-            ConstructionSite[] sites = FindObjectsOfType<ConstructionSite>();
             foreach (ConstructionSite site in sites)
             {
                 if (site.NeedsPlanks())
@@ -556,7 +637,8 @@ public class UnitAI : MonoBehaviour
             currentState = UnitState.MovingToSite;
             currentSite = null;
 
-            // ОБЯЗАТЕЛЬНО находим точку входа и занимаем её
+            // Обязательно находим свободную точку входа и занимаем ее.
+            // Если точки нет - ждем, а не идем в дверь без EntryPoint.
             EntryPoint nearestPoint = sawmill.GetNearestFreeEntryPoint(transform.position);
             if (nearestPoint != null)
             {
@@ -568,16 +650,20 @@ public class UnitAI : MonoBehaviour
                 }
                 else
                 {
-                    Debug.Log("Точка входа занята, жду...");
-                    targetEntryPoint = null;
-                    targetPosition = sawmill.GetDoorPosition();
+                    Debug.Log("Точка входа лесопилки занята, жду...");
+                    currentState = UnitState.Idle;
+                    SetIdleAnimation();
+                    StartCoroutine(WaitAndRetrySawmill());
+                    return;
                 }
             }
             else
             {
-                Debug.LogWarning("У лесопилки нет свободных точек входа!");
-                targetEntryPoint = null;
-                targetPosition = sawmill.GetDoorPosition();
+                Debug.LogWarning("У лесопилки нет свободных точек входа, жду...");
+                currentState = UnitState.Idle;
+                SetIdleAnimation();
+                StartCoroutine(WaitAndRetrySawmill());
+                return;
             }
 
             SetWalkAnimation();
@@ -590,7 +676,9 @@ public class UnitAI : MonoBehaviour
 
     public void GoToSawmill(Sawmill targetSawmill)
     {
+        ReleaseReservedEntryPoint();
         currentState = UnitState.MovingToSite;
+        currentSite = null;
 
         EntryPoint nearestPoint = targetSawmill.GetNearestFreeEntryPoint(transform.position);
         if (nearestPoint != null && nearestPoint.TryOccupy())
@@ -600,8 +688,10 @@ public class UnitAI : MonoBehaviour
         }
         else
         {
-            targetEntryPoint = null;
-            targetPosition = targetSawmill.GetDoorPosition();
+            currentState = UnitState.Idle;
+            SetIdleAnimation();
+            StartCoroutine(WaitAndRetrySawmill());
+            return;
         }
 
         SetWalkAnimation();
@@ -610,6 +700,7 @@ public class UnitAI : MonoBehaviour
 
     public void GoToStorage(Storage targetStorage)
     {
+        ReleaseReservedEntryPoint();
         storage = targetStorage;
         currentState = UnitState.MovingToStorage;
         targetPosition = storage.GetDoorPosition();
@@ -730,6 +821,11 @@ public class UnitAI : MonoBehaviour
     public void SetHasPlank(bool value)
     {
         hasPlank = value;
+        if (!value)
+        {
+            // Следующая доска должна идти через ту же точку входа стройки (если она валидна).
+            targetEntryPoint = null;
+        }
 
         if (plankVisual != null)
             plankVisual.SetActive(value);
@@ -788,6 +884,46 @@ public class UnitAI : MonoBehaviour
     {
         woodAmount = amount;
         Debug.Log($"UnitAI.SetWoodAmount: woodAmount = {amount}");
+    }
+
+    private bool TryAssignSiteEntryPoint(ConstructionSite site)
+    {
+        if (site == null)
+            return false;
+
+        // Сначала пытаемся использовать "любимую" точку, чтобы не прыгать между входами.
+        if (preferredSiteEntryPoint != null &&
+            preferredSiteEntryPoint.parentBuilding == site &&
+            !preferredSiteEntryPoint.isOccupied &&
+            preferredSiteEntryPoint.TryOccupy())
+        {
+            targetEntryPoint = preferredSiteEntryPoint;
+            targetPosition = preferredSiteEntryPoint.transform.position;
+            Debug.Log($"Использую сохраненную точку входа: {preferredSiteEntryPoint.name}");
+            return true;
+        }
+
+        EntryPoint nearestPoint = site.GetNearestFreeEntryPoint(transform.position);
+        if (nearestPoint != null && nearestPoint.TryOccupy())
+        {
+            preferredSiteEntryPoint = nearestPoint;
+            targetEntryPoint = nearestPoint;
+            targetPosition = nearestPoint.transform.position;
+            Debug.Log($"Выбрана новая точка входа: {nearestPoint.name}");
+            return true;
+        }
+
+        targetEntryPoint = null;
+        return false;
+    }
+
+    private void ReleaseReservedEntryPoint()
+    {
+        if (targetEntryPoint != null)
+        {
+            targetEntryPoint.Vacate();
+            targetEntryPoint = null;
+        }
     }
 
 }

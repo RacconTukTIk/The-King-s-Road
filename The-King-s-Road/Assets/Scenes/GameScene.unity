@@ -2217,7 +2217,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Storage
   entryPoints: []
   buildingCollider: {fileID: 271545564}
-  planks: 4
+  planks: 0
+  maxPlanks: 1
   doorPoint: {fileID: 911073357}
   exitPoint: {fileID: 1666237121}
   interactionTime: 1

@@ -31,13 +31,13 @@ public class ConstructionSite : Building
     private bool isProgressBarActive = false;
 
     [Header("Building Completion")]
-    [Tooltip("Имя скрипта готового здания (например: 'Warehouse', 'Tavern')")]
-    public string finishedBuildingScriptName = "Tavern"; // Меняем на Tavern
+    [Tooltip("пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ (пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ: 'Warehouse', 'Tavern')")]
+    public string finishedBuildingScriptName = "Tavern"; // пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ Tavern
 
-    [Tooltip("Сохранять ли точки входа после завершения")]
+    [Tooltip("пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ")]
     public bool keepEntryPoints = true;
 
-    [Tooltip("Сохранять ли коллайдер")]
+    [Tooltip("пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ")]
     public bool keepCollider = true;
 
     void Start()
@@ -147,7 +147,7 @@ public class ConstructionSite : Building
 
         if (!unit.HasPlank)
         {
-            Debug.LogWarning($"Юнит {unit.name} пришёл на стройку без доски!");
+            Debug.LogWarning($"пїЅпїЅпїЅпїЅ {unit.name} пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ!");
             usedEntryPoint?.Vacate();
             unit.FindJob();
             return;
@@ -155,7 +155,7 @@ public class ConstructionSite : Building
 
         if (isComplete)
         {
-            Debug.Log("Стройка уже завершена");
+            Debug.Log("пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ");
             usedEntryPoint?.Vacate();
             unit.FindJob();
             return;
@@ -168,41 +168,37 @@ public class ConstructionSite : Building
     {
         if (unit == null || usedEntryPoint == null)
         {
-            Debug.LogError("DeliverPlankRoutine: unit или usedEntryPoint null");
+            Debug.LogError("DeliverPlankRoutine: unit пїЅпїЅпїЅ usedEntryPoint null");
             yield break;
         }
 
         if (!unit.HasPlank)
         {
-            Debug.LogError($"DeliverPlankRoutine: У юнита {unit.name} нет доски в начале корутины!");
+            Debug.LogError($"DeliverPlankRoutine: пїЅ пїЅпїЅпїЅпїЅпїЅ {unit.name} пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ!");
             usedEntryPoint?.Vacate();
             unit.FindJob();
             yield break;
         }
 
-        Debug.Log($"DeliverPlankRoutine: Юнит {unit.name} начал сдачу доски. Доска есть: {unit.HasPlank}");
+        Debug.Log($"DeliverPlankRoutine: пїЅпїЅпїЅпїЅ {unit.name} пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ. пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ: {unit.HasPlank}");
+
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅ "пїЅпїЅпїЅпїЅпїЅпїЅпїЅ" пїЅпїЅ-пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ.
+        unit.SetHasPlank(false);
 
         yield return new WaitForSeconds(0.3f);
 
         if (deliveredPlanks >= requiredPlanks)
         {
-            Debug.Log("Стройка уже завершена, доска не принята");
-            usedEntryPoint?.Vacate();
-            unit.FindJob();
-            yield break;
-        }
-
-        if (!unit.HasPlank)
-        {
-            Debug.LogError($"DeliverPlankRoutine: У юнита {unit.name} пропала доска во время паузы!");
+            Debug.Log("пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ");
+            // пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ.
+            unit.SetHasPlank(true);
             usedEntryPoint?.Vacate();
             unit.FindJob();
             yield break;
         }
 
         deliveredPlanks++;
-        unit.SetHasPlank(false);
-        Debug.Log($"Доставлена доска: {deliveredPlanks}/{requiredPlanks} от юнита {unit.name}");
+        Debug.Log($"пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ: {deliveredPlanks}/{requiredPlanks} пїЅпїЅ пїЅпїЅпїЅпїЅпїЅ {unit.name}");
 
         if (deliveredPlanks == 1)
         {
@@ -217,31 +213,45 @@ public class ConstructionSite : Building
             buildEffect.Play();
         }
 
-        bool completedNow = false;
-        if (deliveredPlanks >= requiredPlanks)
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ.
+        // пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅ.
+        if (unit != null && usedEntryPoint != null)
         {
-            completedNow = true;
-            CompleteConstruction(); // Теперь только один метод
+            Vector3 outward = (usedEntryPoint.transform.position - transform.position).normalized;
+            if (outward.sqrMagnitude < 0.001f)
+            {
+                outward = Vector3.up;
+            }
+
+            unit.transform.position = usedEntryPoint.transform.position + outward * 0.35f;
         }
 
         usedEntryPoint?.Vacate();
 
+        bool completedNow = false;
+        if (deliveredPlanks >= requiredPlanks)
+        {
+            completedNow = true;
+            CompleteConstruction();
+        }
+
         if (!completedNow && NeedsPlanks())
         {
-            Debug.Log($"Юнит {unit.name} идет за следующей доской");
+            Debug.Log($"пїЅпїЅпїЅпїЅ {unit.name} пїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ");
             Storage storage = FindObjectOfType<Storage>();
-            if (storage != null)
+            if (storage != null && storage.planks > 0)
             {
                 unit.GoToStorage(storage);
             }
             else
             {
+                Debug.Log("пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ");
                 unit.FindJob();
             }
         }
         else
         {
-            Debug.Log($"Юнит {unit.name} ищет новую работу");
+            Debug.Log($"пїЅпїЅпїЅпїЅ {unit.name} пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ");
             unit.FindJob();
         }
     }
@@ -343,7 +353,7 @@ public class ConstructionSite : Building
             completeEffect.Play();
         }
 
-        Debug.Log("Здание построено!");
+        Debug.Log("пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ!");
         isProgressBarActive = false;
 
         
@@ -377,10 +387,10 @@ public class ConstructionSite : Building
         Destroy(progressBarParent.gameObject);
     }
 
-    // Метод для замены строительного скрипта на функциональный
+    // пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     private void ReplaceWithFunctionalBuilding()
     {
-        // Сначала удаляем прогресс-бар, если он ещё есть
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ-пїЅпїЅпїЅ, пїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅ
         if (progressBarParent != null)
         {
             Destroy(progressBarParent.gameObject);
@@ -392,10 +402,10 @@ public class ConstructionSite : Building
 
         GameObject thisGameObject = gameObject;
 
-        // Удаляем компонент ConstructionSite
-        DestroyImmediate(this);
+        // пїЅ runtime пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ.
+        Destroy(this);
 
-        // Добавляем новый скрипт по имени
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
         System.Type buildingType = System.Type.GetType(finishedBuildingScriptName);
 
         if (buildingType == null)
@@ -425,14 +435,14 @@ public class ConstructionSite : Building
 
             functionalBuilding.OnConstructionComplete();
 
-            Debug.Log($"Здание преобразовано в {finishedBuildingScriptName}");
+            Debug.Log($"пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ {finishedBuildingScriptName}");
         }
         else
         {
-            Debug.LogError($"Скрипт {finishedBuildingScriptName} не найден! Убедитесь, что имя написано правильно.");
+            Debug.LogError($"пїЅпїЅпїЅпїЅпїЅпїЅ {finishedBuildingScriptName} пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ! пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ.");
 
             var defaultBuilding = thisGameObject.AddComponent<FunctionalBuilding>();
-            defaultBuilding.buildingName = "Обычное здание";
+            defaultBuilding.buildingName = "пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ";
 
             if (keepEntryPoints && entryPointsList != null)
             {

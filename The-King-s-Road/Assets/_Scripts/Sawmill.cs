@@ -152,70 +152,88 @@
         {
             isWorking = true;
             Debug.Log($"{unit.name} начал вход в лесопилку");
+            SpriteRenderer unitRenderer = null;
+            Collider2D unitCollider = null;
 
-            // Отключаем коллайдер здания
-            if (buildingCollider != null)
+            try
             {
-                buildingCollider.enabled = false;
-                Debug.Log("Коллайдер лесопилки отключен");
+                if (buildingCollider != null)
+                {
+                    buildingCollider.enabled = false;
+                    Debug.Log("Коллайдер лесопилки отключен");
+                }
+
+                // Скрываем юнита
+                unitRenderer = unit.GetComponent<SpriteRenderer>();
+                unitCollider = unit.GetComponent<Collider2D>();
+                if (unitRenderer != null) unitRenderer.enabled = false;
+                if (unitCollider != null) unitCollider.enabled = false;
+                if (unit.plankVisual != null) unit.plankVisual.SetActive(false);
+
+                yield return new WaitForSeconds(enterExitTime);
+
+                // Включаем звук работы
+                if (workSound != null && audioSource != null)
+                {
+                    audioSource.clip = workSound;
+                    audioSource.Play();
+                }
+
+                // Производство досок
+                for (int i = 0; i < maxProductionPerVisit; i++)
+                {
+                    Debug.Log($"Производство доски {i + 1}/{maxProductionPerVisit}");
+                    yield return new WaitForSeconds(productionTime);
+                }
+
+                // Выключаем звук
+                if (audioSource != null && audioSource.isPlaying) audioSource.Stop();
+
+                // Юнит забирает доски
+                unit.SetHasPlank(true);
+                Debug.Log($"Произведено {maxProductionPerVisit} досок");
+
+                // Выход
+                if (exitPoint != null)
+                {
+                    unit.transform.position = exitPoint.position;
+                    Debug.Log($"Юнит перемещен на выход: {exitPoint.position}");
+                }
+
+                // Показываем юнита
+                if (unitRenderer != null) unitRenderer.enabled = true;
+                if (unitCollider != null) unitCollider.enabled = true;
+                if (unit.plankVisual != null && unit.HasPlank) unit.plankVisual.SetActive(true);
+
+                yield return new WaitForSeconds(enterExitTime);
+
+                Debug.Log($"{unit.name} вышел из лесопилки с досками");
+                unit.FindJob();
             }
-
-            // Скрываем юнита
-            SpriteRenderer unitRenderer = unit.GetComponent<SpriteRenderer>();
-            Collider2D unitCollider = unit.GetComponent<Collider2D>();
-            if (unitRenderer != null) unitRenderer.enabled = false;
-            if (unitCollider != null) unitCollider.enabled = false;
-            if (unit.plankVisual != null) unit.plankVisual.SetActive(false);
-
-            yield return new WaitForSeconds(enterExitTime);
-
-            // Включаем звук работы
-            if (workSound != null && audioSource != null)
+            finally
             {
-                audioSource.clip = workSound;
-                audioSource.Play();
+                if (audioSource != null && audioSource.isPlaying) audioSource.Stop();
+
+                if (buildingCollider != null)
+                {
+                    buildingCollider.enabled = true;
+                    Debug.Log("Коллайдер лесопилки включен (finally)");
+                }
+
+                if (unitRenderer != null) unitRenderer.enabled = true;
+                if (unitCollider != null) unitCollider.enabled = true;
+
+                usedEntryPoint?.Vacate();
+                isWorking = false;
             }
+        }
 
-            // Производство досок
-            for (int i = 0; i < maxProductionPerVisit; i++)
-            {
-                Debug.Log($"Производство доски {i + 1}/{maxProductionPerVisit}");
-                yield return new WaitForSeconds(productionTime);
-            }
-
-            // Выключаем звук
-            if (audioSource != null && audioSource.isPlaying) audioSource.Stop();
-
-            // Юнит забирает доски
-            unit.SetHasPlank(true);
-            Debug.Log($"Произведено {maxProductionPerVisit} досок");
-
-            // Выход
-            if (exitPoint != null)
-            {
-                unit.transform.position = exitPoint.position;
-                Debug.Log($"Юнит перемещен на выход: {exitPoint.position}");
-            }
-
-            // Показываем юнита
-            if (unitRenderer != null) unitRenderer.enabled = true;
-            if (unitCollider != null) unitCollider.enabled = true;
-            if (unit.plankVisual != null && unit.HasPlank) unit.plankVisual.SetActive(true);
-
-            yield return new WaitForSeconds(enterExitTime);
-
-            // Включаем коллайдер обратно
+        private void OnDisable()
+        {
             if (buildingCollider != null)
             {
                 buildingCollider.enabled = true;
-                Debug.Log("Коллайдер лесопилки включен");
             }
-
-            usedEntryPoint?.Vacate();
-            isWorking = false;
-
-            Debug.Log($"{unit.name} вышел из лесопилки с досками");
-            unit.FindJob();
         }
 
         private void OnDrawGizmos()
