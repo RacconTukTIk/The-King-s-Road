@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using System.Linq;
 
 public abstract class Building : MonoBehaviour
 {
@@ -7,25 +8,32 @@ public abstract class Building : MonoBehaviour
     public List<EntryPoint> entryPoints = new List<EntryPoint>();
     public Collider2D buildingCollider;
 
+    Collider2D[] cachedBuildingColliders;
+
+    protected virtual void Awake()
+    {
+        CacheBuildingColliders();
+    }
+
     protected virtual void Start()
     {
-        // Автоматически находим все точки входа среди дочерних объектов
+        //        
         if (entryPoints == null || entryPoints.Count == 0)
         {
             entryPoints = new List<EntryPoint>(GetComponentsInChildren<EntryPoint>());
         }
 
-        // Связываем точки с этим зданием (с проверкой на null)
+        //      (   null)
         foreach (var point in entryPoints)
         {
-            if (point != null)  // <-- ВАЖНО: проверяем на null
+            if (point != null)  // <-- :   null
             {
                 point.parentBuilding = this;
             }
         }
     }
 
-    // Найти ближайшую свободную точку входа
+    //     
     public virtual EntryPoint GetNearestFreeEntryPoint(Vector3 unitPosition)
     {
         if (entryPoints == null || entryPoints.Count == 0)
@@ -36,7 +44,7 @@ public abstract class Building : MonoBehaviour
 
         foreach (var point in entryPoints)
         {
-            if (point != null && !point.isOccupied)  // <-- проверка на null
+            if (point != null && !point.isOccupied)  // <--   null
             {
                 float distance = Vector3.Distance(unitPosition, point.transform.position);
                 if (distance < minDistance)
@@ -50,7 +58,7 @@ public abstract class Building : MonoBehaviour
         return nearest;
     }
 
-    // Освободить точку входа
+    //   
     public void VacateEntryPoint(EntryPoint point)
     {
         if (point != null)
@@ -59,7 +67,7 @@ public abstract class Building : MonoBehaviour
         }
     }
 
-    // Абстрактный метод для взаимодействия
+    //    
     public abstract void Interact(UnitAI unit, EntryPoint usedEntryPoint);
 
     public virtual void RefreshEntryPoints()
@@ -69,5 +77,40 @@ public abstract class Building : MonoBehaviour
             if (point != null)
                 point.parentBuilding = this;
         }
+    }
+
+    protected void CacheBuildingColliders()
+    {
+        cachedBuildingColliders = GetComponentsInChildren<Collider2D>(true)
+            .Where(col => col != null)
+            .ToArray();
+    }
+
+    /// <summary>
+    /// Пропуск только этого юнита сквозь коллайдеры здания (коллайдер здания остаётся для остальных).
+    /// </summary>
+    public void SetCollisionIgnoredForUnit(Collider2D unitCollider, bool ignore)
+    {
+        if (unitCollider == null)
+            return;
+
+        if (cachedBuildingColliders == null || cachedBuildingColliders.Length == 0)
+            CacheBuildingColliders();
+
+        foreach (Collider2D buildingCol in cachedBuildingColliders)
+        {
+            if (buildingCol == null || buildingCol == unitCollider)
+                continue;
+
+            Physics2D.IgnoreCollision(unitCollider, buildingCol, ignore);
+        }
+    }
+
+    public void SetCollisionIgnoredForUnit(UnitAI unit, bool ignore)
+    {
+        if (unit == null)
+            return;
+
+        SetCollisionIgnoredForUnit(unit.GetComponent<Collider2D>(), ignore);
     }
 }

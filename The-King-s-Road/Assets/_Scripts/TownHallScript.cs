@@ -4,7 +4,7 @@ public class TownHallScript : MonoBehaviour
 {
     public GameObject unitPrefab;
     public Transform spawnPoint;
-    int count = 3;
+    int count = 4;
 
     void Update()
     {
@@ -29,7 +29,7 @@ public class TownHallScript : MonoBehaviour
         {
             Vector3 spawnPosition = (spawnPoint != null) ? spawnPoint.position : transform.position;
             Instantiate(unitPrefab, spawnPosition, Quaternion.identity);
-            Debug.Log("Строитель создан!");
+            Debug.Log("пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ!");
             count--;
         }
     }

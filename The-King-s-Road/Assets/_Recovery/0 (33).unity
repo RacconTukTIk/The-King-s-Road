@@ -2217,7 +2217,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Storage
   entryPoints: []
   buildingCollider: {fileID: 271545564}
-  planks: 1
+  planks: 3
   maxPlanks: 5
   doorPoint: {fileID: 911073357}
   exitPoint: {fileID: 1666237121}
@@ -6325,6 +6325,8 @@ MonoBehaviour:
   enterExitTime: 0.5
   workSound: {fileID: 8300000, guid: d2002a65dcfa27c499158cb862d1219a, type: 3}
   workSoundVolume: 0.317
+  planksWaitingPickup: 0
+  maxPickupBuffer: 20
 --- !u!1 &756653312
 GameObject:
   m_ObjectHideFlags: 0

@@ -19,8 +19,14 @@
         public float workSoundVolume = 0.5f;
 
         private bool isWorking = false;
+        public bool IsWorking => isWorking;
         private EntryPoint usedEntryPoint;
         private AudioSource audioSource;
+
+        [Header("Output Buffer")]
+        [Tooltip("Доски у выхода, которые забирает юнит с ролью «лесопилка → склад».")]
+        public int planksWaitingPickup = 0;
+        public int maxPickupBuffer = 20;
 
         void Start()
         {
@@ -99,6 +105,27 @@
 
         public Vector3 GetDoorPosition() => doorPoint != null ? doorPoint.position : transform.position;
         public Vector3 GetExitPosition() => exitPoint != null ? exitPoint.position : GetDoorPosition();
+        public int PlanksWaitingPickup => planksWaitingPickup;
+
+        public void DepositProducedPlanks(int amount)
+        {
+            if (amount <= 0)
+                return;
+
+            planksWaitingPickup = Mathf.Min(planksWaitingPickup + amount, maxPickupBuffer);
+            Debug.Log($"На выходе лесопилки ждёт досок: {planksWaitingPickup}");
+        }
+
+        public bool TryTakePickupPlank(UnitAI unit)
+        {
+            if (unit == null || planksWaitingPickup <= 0)
+                return false;
+
+            planksWaitingPickup--;
+            unit.SetHasPlank(true);
+            Debug.Log($"Юнит {unit.name} забрал доску с выхода лесопилки. Осталось: {planksWaitingPickup}");
+            return true;
+        }
 
         public override EntryPoint GetNearestFreeEntryPoint(Vector3 unitPosition)
         {
@@ -140,7 +167,15 @@
             {
                 Debug.Log("Лесопилка занята");
                 entryPoint?.Vacate();
-                unit.FindJob();
+                if (WorkCoordinator.ShouldCoordinate()
+                    && WorkCoordinator.Instance.GetRole(unit) == WorkCoordinator.WorkRole.SawmillWorker)
+                {
+                    unit.EnterIdleWaitingForCoordinator();
+                }
+                else
+                {
+                    unit.FindJob();
+                }
                 return;
             }
 
@@ -150,6 +185,13 @@
 
         private IEnumerator EnterAndWork(UnitAI unit)
         {
+            if (!unit.CanWork)
+            {
+                usedEntryPoint?.Vacate();
+                unit.FindJob();
+                yield break;
+            }
+
             isWorking = true;
             Debug.Log($"{unit.name} начал вход в лесопилку");
             SpriteRenderer unitRenderer = null;
@@ -157,11 +199,7 @@
 
             try
             {
-                if (buildingCollider != null)
-                {
-                    buildingCollider.enabled = false;
-                    Debug.Log("Коллайдер лесопилки отключен");
-                }
+                SetCollisionIgnoredForUnit(unit, true);
 
                 // Скрываем юнита
                 unitRenderer = unit.GetComponent<SpriteRenderer>();
@@ -179,19 +217,48 @@
                     audioSource.Play();
                 }
 
-                // Производство досок
+                unit.BeginWork();
+
                 for (int i = 0; i < maxProductionPerVisit; i++)
                 {
+                    if (!unit.CanWork)
+                    {
+                        Debug.Log($"{unit.name} устал и прекращает работу на лесопилке");
+                        break;
+                    }
+
                     Debug.Log($"Производство доски {i + 1}/{maxProductionPerVisit}");
                     yield return new WaitForSeconds(productionTime);
                 }
 
-                // Выключаем звук
+                unit.EndWork();
+
                 if (audioSource != null && audioSource.isPlaying) audioSource.Stop();
 
-                // Юнит забирает доски
-                unit.SetHasPlank(true);
-                Debug.Log($"Произведено {maxProductionPerVisit} досок");
+                if (!unit.CanWork)
+                {
+                    Debug.Log($"{unit.name} слишком устал, выходит с лесопилки без досок");
+                    if (exitPoint != null)
+                        unit.transform.position = exitPoint.position;
+
+                    if (unitRenderer != null) unitRenderer.enabled = true;
+                    if (unitCollider != null) unitCollider.enabled = true;
+                    unit.FindJob();
+                    yield break;
+                }
+
+                int producedAmount = maxProductionPerVisit;
+                if (WorkCoordinator.ShouldCoordinate() && WorkCoordinator.Instance.ShouldDepositAtSawmill(unit))
+                {
+                    DepositProducedPlanks(producedAmount);
+                    WorkCoordinator.NotifyJobsChanged();
+                    Debug.Log($"Произведено {producedAmount} досок — оставлены на выходе лесопилки");
+                }
+                else
+                {
+                    unit.SetHasPlank(true);
+                    Debug.Log("Произведено досок на лесопилке — юнит несёт сам");
+                }
 
                 // Выход
                 if (exitPoint != null)
@@ -203,36 +270,36 @@
                 // Показываем юнита
                 if (unitRenderer != null) unitRenderer.enabled = true;
                 if (unitCollider != null) unitCollider.enabled = true;
-                if (unit.plankVisual != null && unit.HasPlank) unit.plankVisual.SetActive(true);
+                if (unit.plankVisual != null && unit.HasPlank)
+                    unit.plankVisual.SetActive(true);
 
                 yield return new WaitForSeconds(enterExitTime);
 
                 Debug.Log($"{unit.name} вышел из лесопилки с досками");
-                unit.FindJob();
+                unit.BeginSawmillCooldown(5f);
+                if (WorkCoordinator.ShouldCoordinate())
+                {
+                    WorkCoordinator.Instance.ReleaseCommittedRole(unit);
+                    WorkCoordinator.NotifyJobsChanged();
+                }
+                else
+                {
+                    unit.FindJob();
+                }
             }
             finally
             {
+                unit.EndWork();
+
                 if (audioSource != null && audioSource.isPlaying) audioSource.Stop();
 
-                if (buildingCollider != null)
-                {
-                    buildingCollider.enabled = true;
-                    Debug.Log("Коллайдер лесопилки включен (finally)");
-                }
+                SetCollisionIgnoredForUnit(unit, false);
 
                 if (unitRenderer != null) unitRenderer.enabled = true;
                 if (unitCollider != null) unitCollider.enabled = true;
 
                 usedEntryPoint?.Vacate();
                 isWorking = false;
-            }
-        }
-
-        private void OnDisable()
-        {
-            if (buildingCollider != null)
-            {
-                buildingCollider.enabled = true;
             }
         }
 

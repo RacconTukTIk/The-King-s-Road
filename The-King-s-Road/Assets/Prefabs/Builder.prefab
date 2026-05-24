@@ -213,3 +213,16 @@ MonoBehaviour:
   footstepInterval: 0.5
   footstepVolume: 0.3
   plankVisual: {fileID: 0}
+  maxStamina: 100
+  currentStamina: 100
+  staminaDrainRate: 15
+  staminaRestoreRate: 15
+  staminaThreshold: 50
+  tiredIcon: {fileID: 0}
+  tiredIconSprite: {fileID: -7895601659516305588, guid: f98591d61cdec2b49971d8e0196025b0, type: 3}
+  tiredIconOffset: {x: 0.55, y: 0.55}
+  tiredIconScale: 0.65
+  workIcon: {fileID: 0}
+  workIconSprite: {fileID: 5393448996881579246, guid: 9578d68bdd033bd498b13263dc34f2db, type: 3}
+  workIconOffset: {x: 0.55, y: 0.55}
+  workIconScale: 0.65

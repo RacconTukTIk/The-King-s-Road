@@ -17,7 +17,7 @@ public class UnitAI : MonoBehaviour
     private bool isWaiting = false;
 
     // Система состояний
-    public enum UnitState { Idle, MovingToStorage, MovingToSite, Working, EnteringBuilding }
+    public enum UnitState { Idle, MovingToStorage, MovingToSite, Working, EnteringBuilding, Resting }
     public UnitState currentState = UnitState.Idle;
 
     private Storage storage;
@@ -36,6 +36,8 @@ public class UnitAI : MonoBehaviour
     public LayerMask obstacleLayer;
     public float raycastDistance = 1.5f;
     public float stopDistance = 0.3f;
+    [Tooltip("Игнорировать коллайдер лесопилки только у двери/выхода на этом расстоянии.")]
+    public float sawmillDoorPassDistance = 0.75f;
 
     [Header("Footstep Audio")]
     public float footstepInterval = 0.5f;
@@ -45,17 +47,155 @@ public class UnitAI : MonoBehaviour
     [Header("Plank Visual")]
     public GameObject plankVisual;
 
+    [Header("Stamina System")]
+    public float maxStamina = 100f;
+    public float currentStamina = 100f;
+    public float staminaDrainRate = 15f;      // Расход в секунду при работе
+    public float staminaRestoreRate = 25f;     // Восстановление в секунду
+    public float staminaThreshold = 30f;       // Ниже этого значения юнит устаёт
+
+    [Header("Status Icons")]
+    public GameObject tiredIcon;
+    public Sprite tiredIconSprite;
+    public Vector2 tiredIconOffset = new Vector2(0.55f, 0.55f);
+    public float tiredIconScale = 0.65f;
+
+    public GameObject workIcon;
+    public Sprite workIconSprite;
+    public Vector2 workIconOffset = new Vector2(0.55f, 0.55f);
+    public float workIconScale = 0.65f;
+
+    private bool isTired = false;
+    private bool isShowingWorkIcon = false;
+    private bool isResting = false;
+    private bool isSeekingRest = false;
+    private bool pendingRestAfterWork = false;
+    private int activeWorkCount = 0;
+    private Tavern targetTavern;
+
+    private WorkCoordinator.WorkRole assignedWorkRole = WorkCoordinator.WorkRole.Unassigned;
+    private Sawmill pickupSawmillTarget;
+    private bool headingToSawmillPickup;
+    private bool isFreeRoaming;
+    private Coroutine waitForSawmillPlanksRoutine;
+    private bool waitingForSawmillPlanks;
+    private const float sawmillExitReachDistance = 0.65f;
+    private float sawmillCooldownUntil;
+    private Coroutine wanderRoutine;
+
     private bool hasWood = false;
     private int woodAmount = 0;
 
     // Rigidbody2D компонент
     private Rigidbody2D rb;
 
+
+
     // Public property для доступа к hasPlank
-    public bool HasPlank
+    public bool HasPlank => hasPlank;
+    public bool IsExhausted => currentStamina <= 0f;
+    public bool IsTiredNow => currentStamina <= staminaThreshold && !isResting;
+    public bool CanWork => !isSeekingRest && !isResting && currentStamina > 0f;
+    public bool IsPerformingWork => activeWorkCount > 0;
+    public bool HasActiveWork =>
+        !isResting && !isSeekingRest && !isFreeRoaming && (
+            IsPerformingWork ||
+            currentState == UnitState.EnteringBuilding ||
+            currentState == UnitState.Working ||
+            currentState == UnitState.MovingToStorage ||
+            assignedWorkRole != WorkCoordinator.WorkRole.Unassigned ||
+            (currentState == UnitState.MovingToSite && (hasPlank || currentSite != null || IsHeadingToSawmill() || IsHeadingToSawmillPickup())));
+
+    public bool IsHeadingToSawmill()
     {
-        get { return hasPlank; }
+        return targetEntryPoint != null && targetEntryPoint.parentBuilding is Sawmill;
     }
+
+    public bool IsHeadingToSawmillPickup()
+    {
+        return headingToSawmillPickup && pickupSawmillTarget != null;
+    }
+
+    public bool IsRestingForWork()
+    {
+        return isResting || isSeekingRest;
+    }
+
+    public void BeginSawmillCooldown(float seconds = 5f)
+    {
+        sawmillCooldownUntil = Time.time + seconds;
+    }
+
+    public bool IsOnSawmillCooldown()
+    {
+        return Time.time < sawmillCooldownUntil;
+    }
+
+    public WorkCoordinator.WorkRole AssignedWorkRole => assignedWorkRole;
+
+    public bool IsWaitingForSawmillPlanks() => waitingForSawmillPlanks;
+
+    public bool IsFreeForJobReassignment()
+    {
+        if (isFreeRoaming)
+            return true;
+
+        if (waitingForSawmillPlanks)
+            return false;
+
+        if (WorkCoordinator.ShouldCoordinate() && WorkCoordinator.Instance != null)
+        {
+            if (WorkCoordinator.Instance.IsActiveDeliveryCourier(this))
+                return false;
+
+            WorkCoordinator.WorkRole committed = WorkCoordinator.Instance.GetCommittedRole(this);
+            if (committed == WorkCoordinator.WorkRole.DeliverToConstruction)
+                return false;
+
+            if (committed == WorkCoordinator.WorkRole.SawmillWorker
+                || committed == WorkCoordinator.WorkRole.SawmillToStorage)
+            {
+                return false;
+            }
+
+            if (committed != WorkCoordinator.WorkRole.Unassigned
+                && assignedWorkRole != WorkCoordinator.WorkRole.SawmillToStorage)
+            {
+                return false;
+            }
+
+            if (assignedWorkRole == WorkCoordinator.WorkRole.DeliverToConstruction)
+                return false;
+        }
+
+        return currentState == UnitState.Idle;
+    }
+
+    bool ShouldPreserveCurrentTask()
+    {
+        if (currentState == UnitState.EnteringBuilding || IsPerformingWork)
+            return true;
+
+        if (isFreeRoaming)
+            return false;
+
+        if (waitingForSawmillPlanks)
+            return true;
+
+        if (currentState == UnitState.MovingToStorage)
+            return true;
+
+        if (currentState == UnitState.MovingToSite
+            && (HasPlank || headingToSawmillPickup || targetEntryPoint != null))
+            return true;
+
+        if (currentState == UnitState.Resting)
+            return true;
+
+        return false;
+    }
+
+
 
     void Start()
     {
@@ -77,6 +217,8 @@ public class UnitAI : MonoBehaviour
         }
 
         storage = FindObjectOfType<Storage>();
+        WorkCoordinator.EnsureExists();
+        currentStamina = maxStamina;
 
         SetIdleAnimation();
 
@@ -84,11 +226,40 @@ public class UnitAI : MonoBehaviour
         if (plankVisual != null)
             plankVisual.SetActive(false);
 
-        FindJob();
+        EnsureTiredIcon();
+        EnsureWorkIcon();
+        if (tiredIcon != null)
+            tiredIcon.SetActive(false);
+        if (workIcon != null)
+            workIcon.SetActive(false);
+
+        WorkCoordinator.ScheduleSpawnJobAssignment();
+    }
+
+    public void BeginWork()
+    {
+        activeWorkCount++;
+        currentState = UnitState.Working;
+    }
+
+    public void EndWork()
+    {
+        activeWorkCount = Mathf.Max(0, activeWorkCount - 1);
+        if (activeWorkCount == 0 && !isResting && !isSeekingRest && currentState == UnitState.Working)
+            currentState = UnitState.Idle;
+    }
+
+    public void RestoreStamina(float amount)
+    {
+        currentStamina = Mathf.Min(maxStamina, currentStamina + amount);
+        UpdateStatusIcons();
     }
 
     void Update()
     {
+        UpdateStamina();
+        UpdateStatusIcons();
+
         if (currentState == UnitState.Idle && !isWaiting)
         {
             idleTimer += Time.deltaTime;
@@ -101,15 +272,297 @@ public class UnitAI : MonoBehaviour
 
         HandleFootstepAudio();
 
-        if (currentState == UnitState.MovingToStorage || currentState == UnitState.MovingToSite)
+        if (currentState == UnitState.MovingToStorage || currentState == UnitState.MovingToSite || currentState == UnitState.Resting)
         {
             MoveToTarget();
         }
     }
 
+    void UpdateStamina()
+    {
+        if (isResting)
+        {
+            currentStamina += staminaRestoreRate * Time.deltaTime;
+            if (currentStamina >= maxStamina)
+                CompleteRest();
+            return;
+        }
+
+        bool isBusy = IsPerformingWork || currentState == UnitState.EnteringBuilding;
+        if (isBusy)
+        {
+            currentStamina -= staminaDrainRate * Time.deltaTime;
+            if (currentStamina <= 0f)
+            {
+                currentStamina = 0f;
+                TriggerRest();
+            }
+        }
+    }
+
+    void UpdateStatusIcons()
+    {
+        SpriteRenderer unitRenderer = GetComponent<SpriteRenderer>();
+        bool visible = unitRenderer == null || unitRenderer.enabled;
+
+        bool shouldBeTired = IsTiredNow && visible;
+        if (shouldBeTired != isTired)
+        {
+            isTired = shouldBeTired;
+            if (tiredIcon != null)
+                tiredIcon.SetActive(isTired);
+        }
+
+        if (isTired && tiredIcon != null)
+            ApplyIconTransform(tiredIcon, tiredIconOffset, tiredIconScale);
+
+        bool shouldShowWork = HasActiveWork && visible && !shouldBeTired;
+        if (shouldShowWork != isShowingWorkIcon)
+        {
+            isShowingWorkIcon = shouldShowWork;
+            if (workIcon != null)
+                workIcon.SetActive(isShowingWorkIcon);
+        }
+
+        if (isShowingWorkIcon && workIcon != null)
+            ApplyIconTransform(workIcon, workIconOffset, workIconScale);
+    }
+
+    static void ApplyIconTransform(GameObject icon, Vector2 offset, float scale)
+    {
+        Transform iconTransform = icon.transform;
+        Transform parent = iconTransform.parent;
+        float facing = parent != null ? parent.localScale.x : 1f;
+        float side = facing >= 0f ? offset.x : -offset.x;
+        iconTransform.localPosition = new Vector3(side, offset.y, 0f);
+        iconTransform.localScale = Vector3.one * scale;
+    }
+
+    void TriggerRest()
+    {
+        if (isSeekingRest || isResting)
+            return;
+
+        SpriteRenderer unitRenderer = GetComponent<SpriteRenderer>();
+        if (unitRenderer != null && !unitRenderer.enabled)
+        {
+            pendingRestAfterWork = true;
+            return;
+        }
+
+        isSeekingRest = true;
+        pendingRestAfterWork = false;
+        AbortCurrentTask();
+
+        Debug.Log($"{gameObject.name} выдохся и прекращает работу.");
+
+        Tavern tavern = FindAvailableTavern();
+        if (tavern != null)
+        {
+            targetTavern = tavern;
+            currentState = UnitState.Resting;
+
+            EntryPoint nearestPoint = tavern.GetNearestFreeEntryPoint(transform.position);
+            if (nearestPoint != null && nearestPoint.TryOccupy())
+            {
+                targetEntryPoint = nearestPoint;
+                targetPosition = nearestPoint.transform.position;
+            }
+            else
+            {
+                targetEntryPoint = null;
+                targetPosition = tavern.GetDoorPosition();
+            }
+
+            SetWalkAnimation();
+            return;
+        }
+
+        StartRestingAtPlace();
+    }
+
+    void AbortCurrentTask()
+    {
+        StopAllCoroutines();
+        ReleaseReservedEntryPoint();
+        StopMoving();
+        isWaiting = false;
+        activeWorkCount = 0;
+        headingToSawmillPickup = false;
+        pickupSawmillTarget = null;
+    }
+
+    Tavern FindAvailableTavern()
+    {
+        Tavern[] taverns = FindObjectsOfType<Tavern>();
+        Tavern nearest = null;
+        float minDistance = float.MaxValue;
+
+        foreach (Tavern tavern in taverns)
+        {
+            if (tavern == null || !tavern.isActiveAndEnabled)
+                continue;
+
+            float distance = Vector3.Distance(transform.position, tavern.transform.position);
+            if (distance < minDistance)
+            {
+                minDistance = distance;
+                nearest = tavern;
+            }
+        }
+
+        return nearest;
+    }
+
+    public void RequestRestAtPlace()
+    {
+        if (isResting)
+            return;
+
+        isSeekingRest = false;
+        AbortCurrentTask();
+        StartRestingAtPlace();
+    }
+
+    void StartRestingAtPlace()
+    {
+        Debug.Log($"{gameObject.name} отдыхает на месте (таверны нет)");
+        isSeekingRest = false;
+        isResting = true;
+        currentState = UnitState.Idle;
+        StopMoving();
+        SetIdleAnimation();
+    }
+
+    public void BeginTavernRest(Tavern tavern)
+    {
+        isSeekingRest = false;
+        isResting = true;
+        targetTavern = tavern;
+        currentState = UnitState.Idle;
+        StopMoving();
+
+        if (tiredIcon != null)
+            tiredIcon.SetActive(false);
+        if (workIcon != null)
+            workIcon.SetActive(false);
+        isShowingWorkIcon = false;
+    }
+
+    public void CompleteRest()
+    {
+        isResting = false;
+        isSeekingRest = false;
+        currentStamina = maxStamina;
+        currentState = UnitState.Idle;
+        targetTavern = null;
+        activeWorkCount = 0;
+
+        if (targetEntryPoint != null)
+        {
+            targetEntryPoint.Vacate();
+            targetEntryPoint = null;
+        }
+
+        UpdateStatusIcons();
+        FindJob();
+    }
+
+    void EnsureTiredIcon()
+    {
+        if (tiredIcon != null)
+            return;
+
+        tiredIcon = new GameObject("TiredIcon");
+        tiredIcon.transform.SetParent(transform, false);
+        tiredIcon.transform.localPosition = new Vector3(tiredIconOffset.x, tiredIconOffset.y, 0f);
+
+        SpriteRenderer iconRenderer = tiredIcon.AddComponent<SpriteRenderer>();
+        SpriteRenderer unitRenderer = GetComponent<SpriteRenderer>();
+        iconRenderer.sprite = tiredIconSprite != null ? tiredIconSprite : CreateDefaultTiredSprite();
+        iconRenderer.sortingLayerID = unitRenderer != null ? unitRenderer.sortingLayerID : 0;
+        iconRenderer.sortingOrder = unitRenderer != null ? unitRenderer.sortingOrder + 2 : 2;
+        iconRenderer.color = new Color(1f, 0.85f, 0.2f, 1f);
+        tiredIcon.transform.localScale = Vector3.one * tiredIconScale;
+        tiredIcon.SetActive(false);
+    }
+
+    static Sprite defaultTiredSprite;
+
+    static Sprite CreateDefaultTiredSprite()
+    {
+        if (defaultTiredSprite != null)
+            return defaultTiredSprite;
+
+        const int size = 16;
+        Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        Color fill = new Color(1f, 0.75f, 0.1f, 1f);
+        Color empty = new Color(0f, 0f, 0f, 0f);
+        Vector2 center = new Vector2(size * 0.5f, size * 0.5f);
+        float radius = size * 0.42f;
+
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                float distance = Vector2.Distance(new Vector2(x + 0.5f, y + 0.5f), center);
+                texture.SetPixel(x, y, distance <= radius ? fill : empty);
+            }
+        }
+
+        texture.Apply();
+        defaultTiredSprite = Sprite.Create(texture, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size);
+        return defaultTiredSprite;
+    }
+
+    void EnsureWorkIcon()
+    {
+        if (workIcon != null)
+            return;
+
+        workIcon = new GameObject("WorkIcon");
+        workIcon.transform.SetParent(transform, false);
+        workIcon.transform.localPosition = new Vector3(workIconOffset.x, workIconOffset.y, 0f);
+
+        SpriteRenderer iconRenderer = workIcon.AddComponent<SpriteRenderer>();
+        SpriteRenderer unitRenderer = GetComponent<SpriteRenderer>();
+        iconRenderer.sprite = workIconSprite != null ? workIconSprite : CreateDefaultWorkSprite();
+        iconRenderer.sortingLayerID = unitRenderer != null ? unitRenderer.sortingLayerID : 0;
+        iconRenderer.sortingOrder = unitRenderer != null ? unitRenderer.sortingOrder + 2 : 2;
+        iconRenderer.color = new Color(0.35f, 0.75f, 1f, 1f);
+        workIcon.transform.localScale = Vector3.one * workIconScale;
+        workIcon.SetActive(false);
+    }
+
+    static Sprite defaultWorkSprite;
+
+    static Sprite CreateDefaultWorkSprite()
+    {
+        if (defaultWorkSprite != null)
+            return defaultWorkSprite;
+
+        const int size = 16;
+        Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        Color fill = new Color(0.35f, 0.75f, 1f, 1f);
+        Color empty = new Color(0f, 0f, 0f, 0f);
+
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                bool inside = x >= 3 && x <= 12 && y >= 3 && y <= 12;
+                texture.SetPixel(x, y, inside ? fill : empty);
+            }
+        }
+
+        texture.Apply();
+        defaultWorkSprite = Sprite.Create(texture, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size);
+        return defaultWorkSprite;
+    }
+
     void HandleFootstepAudio()
     {
-        if (currentState == UnitState.MovingToStorage || currentState == UnitState.MovingToSite)
+        if (currentState == UnitState.MovingToStorage || currentState == UnitState.MovingToSite || currentState == UnitState.Resting)
         {
             footstepTimer += Time.deltaTime;
             if (footstepTimer >= footstepInterval)
@@ -164,6 +617,52 @@ public class UnitAI : MonoBehaviour
         SetIdleAnimation();
     }
 
+    static bool IsColliderPartOfBuilding(Collider2D collider, Building building)
+    {
+        if (collider == null || building == null)
+            return false;
+
+        Transform colliderTransform = collider.transform;
+        Transform buildingTransform = building.transform;
+        return colliderTransform == buildingTransform || colliderTransform.IsChildOf(buildingTransform);
+    }
+
+    bool ShouldIgnoreSawmillCollider(Collider2D collider, float distanceToTarget, Sawmill knownSawmill)
+    {
+        if (collider == null)
+            return false;
+
+        Sawmill sawmill = knownSawmill ?? collider.GetComponentInParent<Sawmill>();
+        if (sawmill == null || !IsColliderPartOfBuilding(collider, sawmill))
+            return false;
+
+        // Забор досок у выхода: идём к exitPoint, коллайдер здания не должен блокировать путь.
+        if (headingToSawmillPickup && pickupSawmillTarget != null
+            && (pickupSawmillTarget == sawmill || pickupSawmillTarget == knownSawmill))
+        {
+            return true;
+        }
+
+        if (distanceToTarget > sawmillDoorPassDistance)
+            return false;
+
+        if (IsHeadingToSawmill() && !HasPlank)
+            return true;
+
+        return false;
+    }
+
+    bool IsRaycastBlocked(RaycastHit2D hit, float distanceToTarget, Sawmill knownSawmill)
+    {
+        if (hit.collider == null)
+            return false;
+
+        if (ShouldIgnoreSawmillCollider(hit.collider, distanceToTarget, knownSawmill))
+            return false;
+
+        return true;
+    }
+
     void MoveToTarget()
     {
         if (currentState == UnitState.MovingToSite && targetEntryPoint != null)
@@ -196,20 +695,23 @@ public class UnitAI : MonoBehaviour
             }
         }
 
-        // ========== НОВЫЙ КОД: Игнорируем коллайдер лесопилки ==========
-        bool ignoreSawmillCollider = false;
         Sawmill targetSawmill = null;
-
-        // Проверяем, идем ли мы на лесопилку
         if (currentState == UnitState.MovingToSite && targetEntryPoint != null)
-        {
             targetSawmill = targetEntryPoint.parentBuilding as Sawmill;
-            if (targetSawmill != null)
+        if (targetSawmill == null && headingToSawmillPickup && pickupSawmillTarget != null)
+            targetSawmill = pickupSawmillTarget;
+
+        // Игнорируем коллайдер таверны
+        bool ignoreTavernCollider = false;
+        Tavern targetTavernBuilding = null;
+        if (currentState == UnitState.Resting && targetEntryPoint != null)
+        {
+            targetTavernBuilding = targetEntryPoint.parentBuilding as Tavern;
+            if (targetTavernBuilding != null)
             {
                 if (Vector3.Distance(targetPosition, targetEntryPoint.transform.position) < 0.1f)
                 {
-                    // Иначе юнит может пройти через всё здание "напрямик".
-                    ignoreSawmillCollider = distanceToTarget <= 0.6f;
+                    ignoreTavernCollider = distanceToTarget <= 0.6f;
                 }
             }
         }
@@ -217,19 +719,24 @@ public class UnitAI : MonoBehaviour
         RaycastHit2D hit = Physics2D.Raycast(transform.position, directionToTarget, raycastDistance, obstacleLayer);
 
         // Игнорируем коллайдер склада
-        if (ignoreStorageCollider && hit.collider != null && hit.collider.gameObject == storage.gameObject)
+        if (ignoreStorageCollider && hit.collider != null && storage != null
+            && IsColliderPartOfBuilding(hit.collider, storage))
         {
             hit = new RaycastHit2D();
         }
 
         // Игнорируем коллайдер стройки
-        if (ignoreSiteCollider && hit.collider != null && hit.collider.gameObject == currentSite.gameObject)
+        if (ignoreSiteCollider && hit.collider != null && currentSite != null
+            && IsColliderPartOfBuilding(hit.collider, currentSite))
         {
             hit = new RaycastHit2D();
         }
 
-        // ========== НОВЫЙ КОД: Игнорируем коллайдер лесопилки ==========
-        if (ignoreSawmillCollider && hit.collider != null && targetSawmill != null && hit.collider.gameObject == targetSawmill.gameObject)
+        if (hit.collider != null && ShouldIgnoreSawmillCollider(hit.collider, distanceToTarget, targetSawmill))
+            hit = new RaycastHit2D();
+
+        // Игнорируем коллайдер таверны
+        if (ignoreTavernCollider && hit.collider != null && targetTavernBuilding != null && hit.collider.gameObject == targetTavernBuilding.gameObject)
         {
             hit = new RaycastHit2D();
         }
@@ -240,13 +747,18 @@ public class UnitAI : MonoBehaviour
 
         if (hit.collider != null)
         {
-            finalDirection = GetAvoidanceDirection(directionToTarget, hit);
+            finalDirection = GetAvoidanceDirection(directionToTarget, hit, distanceToTarget, targetSawmill);
 
             if (finalDirection == Vector3.zero)
             {
-                StopMoving();
-                StartCoroutine(WaitAndRetry());
-                return;
+                if (headingToSawmillPickup && pickupSawmillTarget != null)
+                    finalDirection = directionToTarget;
+                else
+                {
+                    StopMoving();
+                    StartCoroutine(WaitAndRetry());
+                    return;
+                }
             }
         }
 
@@ -277,7 +789,7 @@ public class UnitAI : MonoBehaviour
         }
     }
 
-    Vector3 GetAvoidanceDirection(Vector3 originalDirection, RaycastHit2D obstacleHit)
+    Vector3 GetAvoidanceDirection(Vector3 originalDirection, RaycastHit2D obstacleHit, float distanceToTarget, Sawmill knownSawmill)
     {
         Vector3 bestDirection = Vector3.zero;
         float bestScore = -Mathf.Infinity;
@@ -287,11 +799,12 @@ public class UnitAI : MonoBehaviour
             float angle = i * 45f;
             Vector3 testDirection = Quaternion.Euler(0, 0, angle) * Vector3.right;
 
-            if (!Physics2D.Raycast(transform.position, testDirection, raycastDistance, obstacleLayer))
+            RaycastHit2D testHit = Physics2D.Raycast(transform.position, testDirection, raycastDistance, obstacleLayer);
+            if (!IsRaycastBlocked(testHit, distanceToTarget, knownSawmill))
             {
                 float dotProduct = Vector3.Dot(testDirection, originalDirection);
-                float distanceToTarget = Vector3.Distance(transform.position + testDirection * raycastDistance, targetPosition);
-                float score = dotProduct * 2f - distanceToTarget;
+                float pathDistanceToTarget = Vector3.Distance(transform.position + testDirection * raycastDistance, targetPosition);
+                float score = dotProduct * 2f - pathDistanceToTarget;
 
                 if (score > bestScore)
                 {
@@ -313,7 +826,8 @@ public class UnitAI : MonoBehaviour
         }
 
         Vector3 retreatDirection = -originalDirection;
-        if (!Physics2D.Raycast(transform.position, retreatDirection, raycastDistance, obstacleLayer))
+        RaycastHit2D retreatHit = Physics2D.Raycast(transform.position, retreatDirection, raycastDistance, obstacleLayer);
+        if (!IsRaycastBlocked(retreatHit, distanceToTarget, knownSawmill))
         {
             Debug.DrawRay(transform.position, retreatDirection * raycastDistance, Color.yellow);
             return retreatDirection;
@@ -324,13 +838,20 @@ public class UnitAI : MonoBehaviour
 
     IEnumerator WaitAndRetry()
     {
+        Sawmill sawmillForPickup = headingToSawmillPickup ? pickupSawmillTarget : null;
         StopMoving();
 
         isWaiting = true;
         yield return new WaitForSeconds(2f);
         isWaiting = false;
 
-        if (currentState == UnitState.MovingToStorage || currentState == UnitState.MovingToSite)
+        if (sawmillForPickup != null && assignedWorkRole == WorkCoordinator.WorkRole.SawmillToStorage)
+        {
+            ResumeMovingToSawmillExit(sawmillForPickup);
+            yield break;
+        }
+
+        if (currentState == UnitState.MovingToStorage || currentState == UnitState.MovingToSite || currentState == UnitState.Resting)
         {
             SetWalkAnimation();
         }
@@ -347,6 +868,28 @@ public class UnitAI : MonoBehaviour
             case UnitState.MovingToSite:
                 OnReachedSite();
                 break;
+
+            case UnitState.Resting:
+                OnReachedTavern();
+                break;
+        }
+    }
+
+    void OnReachedTavern()
+    {
+        StopMoving();
+
+        if (targetEntryPoint != null && targetEntryPoint.parentBuilding is Tavern)
+        {
+            Tavern tavern = targetEntryPoint.parentBuilding as Tavern;
+            Debug.Log($"ДОШЕЛ ДО ТАВЕРНЫ! Отдыхаю в {tavern.name}");
+            tavern.Interact(this, targetEntryPoint);
+            targetEntryPoint = null;
+        }
+        else
+        {
+            // Если не дошли до таверны, отдыхаем на месте
+            RequestRestAtPlace();
         }
     }
 
@@ -385,41 +928,32 @@ public class UnitAI : MonoBehaviour
 
         if (hasPlank)
         {
-            Debug.Log("Вышел со склада с доской, иду к стройке");
-            currentState = UnitState.MovingToSite;
+            StopWandering();
+            isFreeRoaming = false;
 
-            if (currentSiteRef != null)
-            {
-                if (TryAssignSiteEntryPoint(currentSiteRef))
-                {
-                    Debug.Log($"Иду к точке входа: {targetEntryPoint.name}");
-                }
-                else
-                {
-                    Debug.Log("Нет свободных точек входа стройки, жду и повторяю");
-                    StartCoroutine(WaitAndRetrySite());
-                    yield break;
-                }
-
-                SetWalkAnimation();
-            }
-            else
-            {
-                Debug.LogError("currentSiteRef = null после выхода из склада!");
+            if (!ResumeDeliveryToConstruction(currentSiteRef))
                 FindJob();
-            }
         }
         else
         {
             Debug.Log("На складе нет досок");
+            if (WorkCoordinator.ShouldCoordinate())
+                WorkCoordinator.Instance.ReleaseDelivery(this);
+
             currentState = UnitState.Idle;
             SetIdleAnimation();
-            StartCoroutine(WaitAndRetryStorage());
+            FindJob();
         }
     }
 
     void OnReachedSite()
     {
+        if (headingToSawmillPickup && pickupSawmillTarget != null)
+        {
+            HandleSawmillPickupArrival();
+            return;
+        }
+
         StopMoving();
         Debug.Log($"OnReachedSite: hasPlank={hasPlank}, currentSite={currentSite?.name}, targetEntryPoint={targetEntryPoint?.name}");
 
@@ -427,9 +961,31 @@ public class UnitAI : MonoBehaviour
         if (targetEntryPoint != null && targetEntryPoint.parentBuilding is Sawmill)
         {
             Sawmill sawmill = targetEntryPoint.parentBuilding as Sawmill;
-            Debug.Log($"ДОШЕЛ ДО ЛЕСОПИЛКИ! Иду на лесопилку {sawmill.name}");
-            sawmill.Interact(this, targetEntryPoint);
+            EntryPoint entry = targetEntryPoint;
             targetEntryPoint = null;
+
+            if (sawmill.IsWorking)
+            {
+                entry.Vacate();
+                EnterIdleWaitingForCoordinator();
+                return;
+            }
+
+            if (IsOnSawmillCooldown())
+            {
+                entry.Vacate();
+                if (sawmill.PlanksWaitingPickup > 0 && sawmill.TryTakePickupPlank(this))
+                {
+                    GoToStorage(storage);
+                    return;
+                }
+
+                FindJob();
+                return;
+            }
+
+            Debug.Log($"ДОШЕЛ ДО ЛЕСОПИЛКИ! Иду на лесопилку {sawmill.name}");
+            sawmill.Interact(this, entry);
             return;
         }
 
@@ -490,21 +1046,160 @@ public class UnitAI : MonoBehaviour
     IEnumerator WaitAndRetryStorage()
     {
         StopMoving();
-        yield return new WaitForSeconds(3f);
+        currentState = UnitState.Idle;
+        SetIdleAnimation();
+        yield return new WaitForSeconds(2f);
+        FindJob();
+    }
 
-        if (storage != null)
+    void HandleSawmillPickupArrival()
+    {
+        Sawmill sawmill = pickupSawmillTarget;
+        if (sawmill == null)
         {
-            currentState = UnitState.MovingToStorage;
-            targetPosition = storage.GetDoorPosition();
-            targetEntryPoint = null;
-            SetWalkAnimation();
+            headingToSawmillPickup = false;
+            pickupSawmillTarget = null;
+            FindJob();
+            return;
+        }
+
+        if (TryTakeSawmillPickupPlank(sawmill))
+            return;
+
+        if (sawmill.PlanksWaitingPickup <= 0)
+        {
+            EnterWaitingForSawmillPlanks(sawmill);
+            return;
+        }
+
+        if (!IsNearSawmillExit(sawmill, sawmillExitReachDistance))
+        {
+            ResumeMovingToSawmillExit(sawmill);
+            return;
+        }
+
+        EnterWaitingForSawmillPlanks(sawmill);
+    }
+
+    bool IsWithinSawmillPickupRange(Sawmill sawmill)
+    {
+        if (sawmill == null)
+            return false;
+
+        float exitDistance = Vector3.Distance(transform.position, sawmill.GetExitPosition());
+        float doorDistance = Vector3.Distance(transform.position, sawmill.GetDoorPosition());
+        return exitDistance <= 1.4f || doorDistance <= 1.2f;
+    }
+
+    bool TryTakeSawmillPickupPlank(Sawmill sawmill)
+    {
+        if (sawmill == null || sawmill.PlanksWaitingPickup <= 0)
+            return false;
+
+        if (!IsWithinSawmillPickupRange(sawmill) && !IsNearSawmillExit(sawmill, sawmillExitReachDistance))
+            return false;
+
+        if (!sawmill.TryTakePickupPlank(this))
+            return false;
+
+        headingToSawmillPickup = false;
+        pickupSawmillTarget = null;
+        StopMoving();
+        Debug.Log("[Склад] Забрал доску у лесопилки");
+        GoToStorage(storage);
+        return true;
+    }
+
+    void ResumeMovingToSawmillExit(Sawmill sawmill)
+    {
+        pickupSawmillTarget = sawmill;
+        headingToSawmillPickup = true;
+        currentState = UnitState.MovingToSite;
+        targetPosition = sawmill.GetExitPosition();
+        SetWalkAnimation();
+        Debug.Log("[Склад] Иду к выходу лесопилки за доской");
+    }
+
+    public void WakeForSawmillPickup(Sawmill sawmill)
+    {
+        if (assignedWorkRole != WorkCoordinator.WorkRole.SawmillToStorage || HasPlank || sawmill == null)
+            return;
+
+        StopWaitingForSawmillPlanks();
+        StopWandering();
+        isFreeRoaming = false;
+
+        if (TryTakeSawmillPickupPlank(sawmill))
+            return;
+
+        if (sawmill.PlanksWaitingPickup > 0)
+            GoToSawmillPickup(sawmill);
+    }
+
+    void StopWaitingForSawmillPlanks()
+    {
+        waitingForSawmillPlanks = false;
+        if (waitForSawmillPlanksRoutine != null)
+        {
+            StopCoroutine(waitForSawmillPlanksRoutine);
+            waitForSawmillPlanksRoutine = null;
+        }
+    }
+
+    void EnterWaitingForSawmillPlanks(Sawmill sawmill)
+    {
+        if (sawmill == null)
+            return;
+
+        StopWandering();
+        isFreeRoaming = false;
+        headingToSawmillPickup = false;
+        pickupSawmillTarget = sawmill;
+        StopMoving();
+        currentState = UnitState.Idle;
+        SetIdleAnimation();
+
+        if (storage != null && storage.IsFull())
+        {
+            Debug.Log("[Склад] Склад полон — жду места для досок с лесопилки");
         }
         else
         {
-            currentState = UnitState.Idle;
-            SetIdleAnimation();
-            FindJob();
+            Debug.Log("[Склад] Жду появления досок на лесопилке (не иду заранее)");
         }
+
+        waitingForSawmillPlanks = true;
+        if (waitForSawmillPlanksRoutine != null)
+            StopCoroutine(waitForSawmillPlanksRoutine);
+
+        waitForSawmillPlanksRoutine = StartCoroutine(WaitForSawmillPlanksCoroutine(sawmill));
+    }
+
+    IEnumerator WaitForSawmillPlanksCoroutine(Sawmill sawmill)
+    {
+        while (waitingForSawmillPlanks
+               && CanWork
+               && assignedWorkRole == WorkCoordinator.WorkRole.SawmillToStorage
+               && sawmill != null
+               && !HasPlank)
+        {
+            if (storage != null && storage.IsFull())
+            {
+                yield return new WaitForSeconds(1.5f);
+                continue;
+            }
+
+            if (sawmill.PlanksWaitingPickup > 0)
+            {
+                StopWaitingForSawmillPlanks();
+                GoToSawmillPickup(sawmill);
+                yield break;
+            }
+
+            yield return new WaitForSeconds(0.5f);
+        }
+
+        StopWaitingForSawmillPlanks();
     }
 
     IEnumerator WaitAndRetrySawmill()
@@ -522,10 +1217,511 @@ public class UnitAI : MonoBehaviour
         FindJob();
     }
 
+    public void BeginCoordinatedRole(WorkCoordinator.WorkRole role)
+    {
+        if (isResting || isSeekingRest || role == WorkCoordinator.WorkRole.Unassigned)
+            return;
+
+        StopWandering();
+        isFreeRoaming = false;
+        assignedWorkRole = role;
+
+        if (WorkCoordinator.ShouldCoordinate())
+            WorkCoordinator.Instance.CommitRole(this, role);
+
+        switch (role)
+        {
+            case WorkCoordinator.WorkRole.DeliverToConstruction:
+                if (WorkCoordinator.ShouldCoordinate())
+                    WorkCoordinator.Instance.EnsureDeliveryCourier(this);
+                if (FindJobDeliverToConstruction())
+                    return;
+                StartCoroutine(WaitAndRetryRole(1f));
+                return;
+
+            case WorkCoordinator.WorkRole.SawmillWorker:
+                if (FindJobSawmillWorker())
+                    return;
+                StartCoroutine(WaitAndRetryRole(1.5f));
+                return;
+
+            case WorkCoordinator.WorkRole.SawmillToStorage:
+                if (FindJobSawmillToStorage())
+                    return;
+                StartCoroutine(WaitAndRetryRole(1.5f));
+                return;
+        }
+    }
+
+    bool IsNearSawmillExit(Sawmill sawmill, float maxDistance)
+    {
+        if (sawmill == null)
+            return false;
+
+        return Vector3.Distance(transform.position, sawmill.GetExitPosition()) <= maxDistance;
+    }
+
+    public void ContinueDeliveryWork()
+    {
+        if (isResting || isSeekingRest)
+            return;
+
+        StopWandering();
+        isFreeRoaming = false;
+        assignedWorkRole = WorkCoordinator.WorkRole.DeliverToConstruction;
+
+        if (WorkCoordinator.ShouldCoordinate())
+        {
+            WorkCoordinator.Instance.EnsureDeliveryCourier(this);
+            WorkCoordinator.Instance.CommitRole(this, WorkCoordinator.WorkRole.DeliverToConstruction);
+        }
+
+        if (FindJobDeliverToConstruction())
+            return;
+
+        StartCoroutine(WaitAndRetryRole(1f));
+    }
+
+    public void ContinueAssignedWork()
+    {
+        if (isResting || isSeekingRest)
+            return;
+
+        StopWandering();
+        isFreeRoaming = false;
+
+        if (WorkCoordinator.ShouldCoordinate())
+        {
+            WorkCoordinator.WorkRole role = WorkCoordinator.Instance.GetCommittedRole(this);
+            if (role == WorkCoordinator.WorkRole.Unassigned)
+                role = assignedWorkRole;
+
+            if (role == WorkCoordinator.WorkRole.DeliverToConstruction
+                || WorkCoordinator.Instance.IsActiveDeliveryCourier(this))
+            {
+                ContinueDeliveryWork();
+                return;
+            }
+
+            if (role == WorkCoordinator.WorkRole.Unassigned)
+            {
+                FindJob();
+                return;
+            }
+
+            assignedWorkRole = role;
+            WorkCoordinator.Instance.CommitRole(this, role);
+
+            switch (role)
+            {
+                case WorkCoordinator.WorkRole.SawmillWorker:
+                    if (FindJobSawmillWorker())
+                        return;
+                    break;
+                case WorkCoordinator.WorkRole.SawmillToStorage:
+                    if (FindJobSawmillToStorage())
+                        return;
+                    break;
+            }
+        }
+
+        FindJob();
+    }
+
     public void FindJob()
     {
+        if (isResting || isSeekingRest)
+            return;
+
+        if (ShouldPreserveCurrentTask())
+            return;
+
+        StopWandering();
+        isFreeRoaming = false;
         StopMoving();
         ReleaseReservedEntryPoint();
+        headingToSawmillPickup = false;
+        pickupSawmillTarget = null;
+
+        if (pendingRestAfterWork || IsExhausted)
+        {
+            pendingRestAfterWork = false;
+            TriggerRest();
+            return;
+        }
+
+        if (WorkCoordinator.ShouldCoordinate())
+        {
+            WorkCoordinator.WorkRole committed = WorkCoordinator.Instance.GetCommittedRole(this);
+            assignedWorkRole = committed != WorkCoordinator.WorkRole.Unassigned
+                ? committed
+                : WorkCoordinator.Instance.GetRole(this);
+
+            if (assignedWorkRole == WorkCoordinator.WorkRole.Unassigned)
+            {
+                WorkCoordinator.Instance.ReleaseCommittedRole(this);
+                EnterIdleNoAssignment();
+                return;
+            }
+
+            WorkCoordinator.Instance.CommitRole(this, assignedWorkRole);
+
+            switch (assignedWorkRole)
+            {
+                case WorkCoordinator.WorkRole.DeliverToConstruction:
+                    if (FindJobDeliverToConstruction())
+                        return;
+                    EnterIdleNoAssignment();
+                    return;
+
+                case WorkCoordinator.WorkRole.SawmillWorker:
+                    if (FindJobSawmillWorker())
+                        return;
+                    EnterIdleNoAssignment();
+                    return;
+
+                case WorkCoordinator.WorkRole.SawmillToStorage:
+                    if (FindJobSawmillToStorage())
+                        return;
+                    EnterIdleNoAssignment();
+                    return;
+            }
+
+            EnterIdleNoAssignment();
+            return;
+        }
+
+        assignedWorkRole = WorkCoordinator.WorkRole.Unassigned;
+        FindJobLegacy();
+    }
+
+    public void EnterIdleWaitingForCoordinator()
+    {
+        EnterIdleNoAssignment();
+    }
+
+    void EnterIdleNoAssignment()
+    {
+        StopWandering();
+
+        if (HasPlank && TryResumePlankTask())
+            return;
+
+        if (WorkCoordinator.ShouldCoordinate())
+        {
+            WorkCoordinator.Instance.ReleaseDelivery(this);
+            WorkCoordinator.Instance.ReleaseCommittedRole(this);
+        }
+
+        assignedWorkRole = WorkCoordinator.WorkRole.Unassigned;
+        headingToSawmillPickup = false;
+        pickupSawmillTarget = null;
+        currentSite = null;
+        isFreeRoaming = true;
+        StopMoving();
+        Debug.Log($"{gameObject.name}: нет работы — брожу и жду задачу.");
+        StartWandering();
+    }
+
+    bool TryResumePlankTask()
+    {
+        isFreeRoaming = false;
+
+        if (WorkCoordinator.ShouldCoordinate())
+        {
+            if (WorkCoordinator.Instance.IsActiveDeliveryCourier(this)
+                || assignedWorkRole == WorkCoordinator.WorkRole.DeliverToConstruction
+                || committedDeliveryRole())
+            {
+                if (FindJobDeliverToConstruction())
+                    return true;
+            }
+
+            if (assignedWorkRole == WorkCoordinator.WorkRole.SawmillToStorage && storage != null)
+            {
+                GoToStorage(storage);
+                return true;
+            }
+        }
+        else if (FindJobDeliverToConstruction())
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    bool committedDeliveryRole()
+    {
+        return WorkCoordinator.Instance != null
+               && WorkCoordinator.Instance.GetCommittedRole(this) == WorkCoordinator.WorkRole.DeliverToConstruction;
+    }
+
+    bool ResumeDeliveryToConstruction(ConstructionSite siteHint)
+    {
+        StopWandering();
+        isFreeRoaming = false;
+
+        ConstructionSite site = siteHint;
+        if (site == null || !site.NeedsPlanks())
+        {
+            foreach (ConstructionSite candidate in FindObjectsOfType<ConstructionSite>())
+            {
+                if (candidate != null && candidate.NeedsPlanks())
+                {
+                    site = candidate;
+                    break;
+                }
+            }
+        }
+
+        if (site == null || !site.NeedsPlanks())
+        {
+            Debug.LogWarning($"{gameObject.name}: несу доску, но стройка не принимает — ищу другую задачу.");
+            return false;
+        }
+
+        currentSite = site;
+        currentState = UnitState.MovingToSite;
+
+        if (!TryAssignSiteEntryPoint(site))
+        {
+            currentState = UnitState.Idle;
+            SetIdleAnimation();
+            StartCoroutine(WaitAndRetrySite());
+            return true;
+        }
+
+        SetWalkAnimation();
+        Debug.Log("[Стройка] Вышел со склада — несу доску на стройплощадку");
+        return true;
+    }
+
+    bool FindJobDeliverToConstruction()
+    {
+        if (WorkCoordinator.ShouldCoordinate()
+            && assignedWorkRole != WorkCoordinator.WorkRole.DeliverToConstruction)
+        {
+            return false;
+        }
+
+        ConstructionSite[] sites = FindObjectsOfType<ConstructionSite>();
+        bool constructionNeedsPlanks = false;
+        foreach (ConstructionSite site in sites)
+        {
+            if (site.NeedsPlanks())
+            {
+                constructionNeedsPlanks = true;
+                break;
+            }
+        }
+
+        if (!constructionNeedsPlanks)
+            return false;
+
+        if (HasPlank)
+        {
+            return ResumeDeliveryToConstruction(currentSite);
+        }
+
+        if (storage != null && storage.planks > 0)
+        {
+            if (WorkCoordinator.ShouldCoordinate())
+            {
+                if (!WorkCoordinator.Instance.TryClaimDelivery(this))
+                {
+                    if (assignedWorkRole == WorkCoordinator.WorkRole.DeliverToConstruction)
+                    {
+                        StartCoroutine(WaitAndRetryRole(1f));
+                        return true;
+                    }
+
+                    EnterIdleNoAssignment();
+                    return true;
+                }
+
+                WorkCoordinator.Instance.CommitRole(this, WorkCoordinator.WorkRole.DeliverToConstruction);
+            }
+
+            currentSite = null;
+            foreach (ConstructionSite site in sites)
+            {
+                if (site.NeedsPlanks())
+                {
+                    currentSite = site;
+                    break;
+                }
+            }
+
+            currentState = UnitState.MovingToStorage;
+            targetPosition = storage.GetDoorPosition();
+            targetEntryPoint = null;
+            SetWalkAnimation();
+            Debug.Log("[Стройка] Иду на склад за доской");
+            return true;
+        }
+
+        if (WorkCoordinator.ShouldCoordinate())
+        {
+            if (WorkCoordinator.Instance.IsActiveDeliveryCourier(this)
+                || assignedWorkRole == WorkCoordinator.WorkRole.DeliverToConstruction)
+            {
+                StartCoroutine(WaitAndRetryRole(1.5f));
+                return true;
+            }
+
+            WorkCoordinator.Instance.ReleaseDelivery(this);
+        }
+
+        EnterIdleNoAssignment();
+        return true;
+    }
+
+    bool FindJobSawmillWorker()
+    {
+        if (WorkCoordinator.ShouldCoordinate()
+            && assignedWorkRole != WorkCoordinator.WorkRole.SawmillWorker)
+        {
+            return false;
+        }
+
+        if (IsOnSawmillCooldown())
+        {
+            EnterIdleNoAssignment();
+            return true;
+        }
+
+        if (HasPlank)
+        {
+            if (WorkCoordinator.ShouldCoordinate() && assignedWorkRole != WorkCoordinator.WorkRole.SawmillToStorage)
+            {
+                EnterIdleNoAssignment();
+                return true;
+            }
+
+            if (storage != null && !storage.IsFull())
+                GoToStorage(storage);
+            else
+                EnterIdleNoAssignment();
+            return true;
+        }
+
+        Sawmill sawmill = FindObjectOfType<Sawmill>();
+        if (sawmill == null)
+            return false;
+
+        if (storage != null && storage.IsFull())
+        {
+            if (WorkCoordinator.ShouldCoordinate()
+                && WorkCoordinator.Instance.CountAvailableUnits() >= 3)
+            {
+                GoToSawmill(sawmill);
+                Debug.Log("[Лесопилка] Склад полон — пилю, доски оставлю у выхода");
+                return true;
+            }
+
+            EnterIdleNoAssignment();
+            return true;
+        }
+
+        GoToSawmill(sawmill);
+        Debug.Log("[Лесопилка] Иду пилить доски");
+        return true;
+    }
+
+    bool FindJobSawmillToStorage()
+    {
+        if (WorkCoordinator.ShouldCoordinate()
+            && assignedWorkRole != WorkCoordinator.WorkRole.SawmillToStorage)
+        {
+            return false;
+        }
+
+        if (HasPlank)
+        {
+            if (storage != null)
+            {
+                GoToStorage(storage);
+                Debug.Log("[Склад] Несу доску с лесопилки на склад");
+                return true;
+            }
+
+            return false;
+        }
+
+        Sawmill sawmill = FindObjectOfType<Sawmill>();
+        if (sawmill == null)
+            return false;
+
+        if (storage != null && storage.IsFull())
+        {
+            EnterWaitingForSawmillPlanks(sawmill);
+            return true;
+        }
+
+        if (sawmill.PlanksWaitingPickup > 0)
+        {
+            GoToSawmillPickup(sawmill);
+            Debug.Log("[Склад] На лесопилке есть доски — иду забирать");
+            return true;
+        }
+
+        EnterWaitingForSawmillPlanks(sawmill);
+        return true;
+    }
+
+    void GoToSawmillPickup(Sawmill sawmill)
+    {
+        if (sawmill == null || sawmill.PlanksWaitingPickup <= 0)
+        {
+            EnterWaitingForSawmillPlanks(sawmill);
+            return;
+        }
+
+        StopWaitingForSawmillPlanks();
+
+        if (TryTakeSawmillPickupPlank(sawmill))
+            return;
+
+        ReleaseReservedEntryPoint();
+        pickupSawmillTarget = sawmill;
+        headingToSawmillPickup = true;
+        currentState = UnitState.MovingToSite;
+        currentSite = null;
+        targetEntryPoint = null;
+        targetPosition = sawmill.GetExitPosition();
+
+        SetWalkAnimation();
+        Debug.Log("[Склад] Иду к выходу лесопилки за доской");
+    }
+
+    IEnumerator WaitAndRetryRole(float delay)
+    {
+        if (isFreeRoaming)
+            yield break;
+
+        WorkCoordinator.WorkRole retryRole = assignedWorkRole;
+        currentState = UnitState.Idle;
+        SetIdleAnimation();
+        yield return new WaitForSeconds(delay);
+
+        if (!isResting && !isSeekingRest)
+        {
+            if (retryRole != WorkCoordinator.WorkRole.Unassigned)
+                BeginCoordinatedRole(retryRole);
+            else
+                ContinueAssignedWork();
+        }
+    }
+
+    void FindJobLegacy()
+    {
+        if (WorkCoordinator.ShouldCoordinate())
+        {
+            EnterIdleNoAssignment();
+            return;
+        }
+
         ConstructionSite[] sites = FindObjectsOfType<ConstructionSite>();
         bool hasConstructionDemand = false;
         foreach (ConstructionSite site in sites)
@@ -676,6 +1872,18 @@ public class UnitAI : MonoBehaviour
 
     public void GoToSawmill(Sawmill targetSawmill)
     {
+        if (IsOnSawmillCooldown())
+        {
+            FindJob();
+            return;
+        }
+
+        if (WorkCoordinator.ShouldCoordinate() && assignedWorkRole != WorkCoordinator.WorkRole.SawmillWorker)
+        {
+            FindJob();
+            return;
+        }
+
         ReleaseReservedEntryPoint();
         currentState = UnitState.MovingToSite;
         currentSite = null;
@@ -700,17 +1908,51 @@ public class UnitAI : MonoBehaviour
 
     public void GoToStorage(Storage targetStorage)
     {
+        if (WorkCoordinator.ShouldCoordinate())
+        {
+            bool allowed = assignedWorkRole == WorkCoordinator.WorkRole.SawmillToStorage
+                           || assignedWorkRole == WorkCoordinator.WorkRole.DeliverToConstruction
+                           || (assignedWorkRole == WorkCoordinator.WorkRole.SawmillWorker && HasPlank);
+
+            if (!allowed)
+            {
+                FindJob();
+                return;
+            }
+
+            if (assignedWorkRole == WorkCoordinator.WorkRole.DeliverToConstruction && !HasPlank
+                && !WorkCoordinator.Instance.TryClaimDelivery(this))
+            {
+                FindJob();
+                return;
+            }
+        }
+
         ReleaseReservedEntryPoint();
         storage = targetStorage;
+
+        if (assignedWorkRole != WorkCoordinator.WorkRole.DeliverToConstruction)
+            currentSite = null;
+
         currentState = UnitState.MovingToStorage;
         targetPosition = storage.GetDoorPosition();
         targetEntryPoint = null;
         SetWalkAnimation();
-        Debug.Log("Иду к складу за доской");
+        Debug.Log("Иду на склад");
+    }
+
+    void StopWandering()
+    {
+        if (wanderRoutine != null)
+        {
+            StopCoroutine(wanderRoutine);
+            wanderRoutine = null;
+        }
     }
 
     void StartWandering()
     {
+        StopWandering();
         currentState = UnitState.Idle;
         SetIdleAnimation();
         GetNewTarget();
@@ -735,15 +1977,18 @@ public class UnitAI : MonoBehaviour
         }
         while (IsPositionBlocked(targetPosition) && attempts < 10);
 
-        StartCoroutine(MoveToWanderTarget());
+        wanderRoutine = StartCoroutine(MoveToWanderTarget());
     }
 
     IEnumerator MoveToWanderTarget()
     {
+        if (!isFreeRoaming)
+            yield break;
+
         currentState = UnitState.MovingToSite;
         SetWalkAnimation();
 
-        while (Vector3.Distance(transform.position, targetPosition) > stopDistance)
+        while (isFreeRoaming && Vector3.Distance(transform.position, targetPosition) > stopDistance)
         {
             if (currentState != UnitState.MovingToSite)
                 yield break;
@@ -751,10 +1996,15 @@ public class UnitAI : MonoBehaviour
             Vector3 direction = (targetPosition - transform.position).normalized;
 
             RaycastHit2D hit = Physics2D.Raycast(transform.position, direction, raycastDistance, obstacleLayer);
+            float wanderDist = Vector3.Distance(transform.position, targetPosition);
+
+            Sawmill wanderSawmill = pickupSawmillTarget;
+            if (hit.collider != null && ShouldIgnoreSawmillCollider(hit.collider, wanderDist, wanderSawmill))
+                hit = new RaycastHit2D();
 
             if (hit.collider != null)
             {
-                Vector3 avoidDirection = GetAvoidanceDirection(direction, hit);
+                Vector3 avoidDirection = GetAvoidanceDirection(direction, hit, wanderDist, wanderSawmill);
                 if (avoidDirection != Vector3.zero)
                 {
                     if (rb != null)
@@ -797,17 +2047,22 @@ public class UnitAI : MonoBehaviour
         SetIdleAnimation();
         SwitchIdleVariant();
 
-        yield return new WaitForSeconds(Random.Range(2f, 5f));
+        yield return new WaitForSeconds(Random.Range(1.5f, 3f));
 
-        ConstructionSite[] sites = FindObjectsOfType<ConstructionSite>();
-        foreach (ConstructionSite site in sites)
+        if (!isFreeRoaming)
         {
-            if (site.NeedsPlanks())
-            {
-                FindJob();
-                yield break;
-            }
+            GetNewTarget();
+            yield break;
         }
+
+        wanderRoutine = null;
+
+        if (!isFreeRoaming)
+            yield break;
+
+        FindJob();
+        if (!isFreeRoaming)
+            yield break;
 
         GetNewTarget();
     }
@@ -835,27 +2090,15 @@ public class UnitAI : MonoBehaviour
 
     void OnDestroy()
     {
-        if (storage != null)
-        {
-            Collider2D unitCollider = GetComponent<Collider2D>();
-            Collider2D storageCollider = storage.GetComponent<Collider2D>();
-            if (unitCollider != null && storageCollider != null)
-            {
-                Physics2D.IgnoreCollision(unitCollider, storageCollider, false);
-            }
-        }
+        if (WorkCoordinator.Instance != null)
+            WorkCoordinator.Instance.ReleaseUnit(this);
 
-        // Восстанавливаем коллизию с лесопилкой
+        if (storage != null)
+            storage.SetCollisionIgnoredForUnit(this, false);
+
         Sawmill sawmill = FindObjectOfType<Sawmill>();
         if (sawmill != null)
-        {
-            Collider2D unitCollider = GetComponent<Collider2D>();
-            Collider2D sawmillCollider = sawmill.GetComponent<Collider2D>();
-            if (unitCollider != null && sawmillCollider != null)
-            {
-                Physics2D.IgnoreCollision(unitCollider, sawmillCollider, false);
-            }
-        }
+            sawmill.SetCollisionIgnoredForUnit(this, false);
 
         if (targetEntryPoint != null)
         {
@@ -925,5 +2168,4 @@ public class UnitAI : MonoBehaviour
             targetEntryPoint = null;
         }
     }
-
 }

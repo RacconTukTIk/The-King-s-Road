@@ -183,9 +183,18 @@ public class ConstructionSite : Building
         Debug.Log($"DeliverPlankRoutine: ���� {unit.name} ����� ����� �����. ����� ����: {unit.HasPlank}");
 
         // ����������� ����� �����, ����� ��� �� "�������" ��-�� ������������ ����� �����.
+        unit.BeginWork();
         unit.SetHasPlank(false);
 
         yield return new WaitForSeconds(0.3f);
+
+        if (!unit.CanWork)
+        {
+            unit.EndWork();
+            unit.SetHasPlank(true);
+            usedEntryPoint?.Vacate();
+            yield break;
+        }
 
         if (deliveredPlanks >= requiredPlanks)
         {
@@ -227,6 +236,12 @@ public class ConstructionSite : Building
         }
 
         usedEntryPoint?.Vacate();
+        unit.EndWork();
+
+        if (!unit.CanWork)
+        {
+            yield break;
+        }
 
         bool completedNow = false;
         if (deliveredPlanks >= requiredPlanks)
@@ -238,20 +253,16 @@ public class ConstructionSite : Building
         if (!completedNow && NeedsPlanks())
         {
             Debug.Log($"���� {unit.name} ���� �� ��������� ������");
-            Storage storage = FindObjectOfType<Storage>();
-            if (storage != null && storage.planks > 0)
-            {
-                unit.GoToStorage(storage);
-            }
-            else
-            {
-                Debug.Log("�� ������ ��� �����, ��� ������ ������");
-                unit.FindJob();
-            }
+            unit.ContinueDeliveryWork();
         }
         else
         {
-            Debug.Log($"���� {unit.name} ���� ����� ������");
+            if (WorkCoordinator.ShouldCoordinate())
+            {
+                WorkCoordinator.Instance.ReleaseDelivery(unit);
+                WorkCoordinator.Instance.ReleaseCommittedRole(unit);
+            }
+
             unit.FindJob();
         }
     }
@@ -263,6 +274,22 @@ public class ConstructionSite : Building
             unit.FindJob();
         yield return null;
     }
+
+#if false
+    private void __TRASH__(UnitAI unit) { if (false) { int __x = 0; Debug.Log(__x.ToString() + "�� ������ ��� �����, ��� ������ ������");
+                unit.FindJob();
+            }
+        }
+        else
+        {
+            Debug.Log($"���� {unit.name} ���� ����� ������");
+            if (WorkCoordinator.ShouldCoordinate())
+                WorkCoordinator.Instance.ReleaseDelivery(unit);
+
+            unit.FindJob();
+        }
+    }
+#endif
 
     private void ShowProgressBar()
     {
