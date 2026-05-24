@@ -1,18 +1,18 @@
 using UnityEngine;
-using UnityEngine.UIElements;   
+using UnityEngine.UIElements;
 
 public class EntryPoint : MonoBehaviour
 {
     public Building parentBuilding;
     public bool isOccupied = false;
 
-    // Визуализация в редакторе
+    // Р’РёР·СѓР°Р»РёР·Р°С†РёСЏ С‚РѕС‡РєРё РІС…РѕРґР° РІ СЂРµРґР°РєС‚РѕСЂРµ.
     private void OnDrawGizmos()
     {
         Gizmos.color = isOccupied ? Color.red : Color.green;
         Gizmos.DrawSphere(transform.position, 0.2f);
 
-        // Рисуем линию к зданию
+        // Р РёСЃСѓРµРј Р»РёРЅРёСЋ РѕС‚ С‚РѕС‡РєРё РІС…РѕРґР° Рє Р·РґР°РЅРёСЋ.
         if (parentBuilding != null)
         {
             Gizmos.color = Color.yellow;

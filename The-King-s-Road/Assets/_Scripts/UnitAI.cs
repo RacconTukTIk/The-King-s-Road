@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using System.Collections;
 
 public class UnitAI : MonoBehaviour
@@ -76,6 +76,8 @@ public class UnitAI : MonoBehaviour
     private WorkCoordinator.WorkRole assignedWorkRole = WorkCoordinator.WorkRole.Unassigned;
     private Sawmill pickupSawmillTarget;
     private bool headingToSawmillPickup;
+    // true = доска с лесопилки нужна сразу на стройку, а не на склад
+    private bool directSawmillPickupToConstruction;
     private bool isFreeRoaming;
     private Coroutine waitForSawmillPlanksRoutine;
     private bool waitingForSawmillPlanks;
@@ -389,6 +391,7 @@ public class UnitAI : MonoBehaviour
         isWaiting = false;
         activeWorkCount = 0;
         headingToSawmillPickup = false;
+        directSawmillPickupToConstruction = false;
         pickupSawmillTarget = null;
     }
 
@@ -839,15 +842,17 @@ public class UnitAI : MonoBehaviour
     IEnumerator WaitAndRetry()
     {
         Sawmill sawmillForPickup = headingToSawmillPickup ? pickupSawmillTarget : null;
+        bool deliverPickupToConstruction = directSawmillPickupToConstruction;
         StopMoving();
 
         isWaiting = true;
         yield return new WaitForSeconds(2f);
         isWaiting = false;
 
-        if (sawmillForPickup != null && assignedWorkRole == WorkCoordinator.WorkRole.SawmillToStorage)
+        if (sawmillForPickup != null
+            && (assignedWorkRole == WorkCoordinator.WorkRole.SawmillToStorage || deliverPickupToConstruction))
         {
-            ResumeMovingToSawmillExit(sawmillForPickup);
+            ResumeMovingToSawmillExit(sawmillForPickup, deliverPickupToConstruction);
             yield break;
         }
 
@@ -937,6 +942,17 @@ public class UnitAI : MonoBehaviour
         else
         {
             Debug.Log("На складе нет досок");
+
+            Sawmill pickupSawmill = FindObjectOfType<Sawmill>();
+            if (currentSiteRef != null && currentSiteRef.NeedsPlanks()
+                && pickupSawmill != null && pickupSawmill.PlanksWaitingPickup > 0)
+            {
+                currentSite = currentSiteRef;
+                GoToSawmillPickup(pickupSawmill, true, currentSiteRef);
+                Debug.Log("[Стройка] Склад пустой — беру готовую доску прямо с лесопилки");
+                yield break;
+            }
+
             if (WorkCoordinator.ShouldCoordinate())
                 WorkCoordinator.Instance.ReleaseDelivery(this);
 
@@ -1055,9 +1071,11 @@ public class UnitAI : MonoBehaviour
     void HandleSawmillPickupArrival()
     {
         Sawmill sawmill = pickupSawmillTarget;
+        bool deliverDirectlyToConstruction = directSawmillPickupToConstruction;
         if (sawmill == null)
         {
             headingToSawmillPickup = false;
+            directSawmillPickupToConstruction = false;
             pickupSawmillTarget = null;
             FindJob();
             return;
@@ -1068,13 +1086,28 @@ public class UnitAI : MonoBehaviour
 
         if (sawmill.PlanksWaitingPickup <= 0)
         {
+            if (deliverDirectlyToConstruction)
+            {
+                headingToSawmillPickup = false;
+                directSawmillPickupToConstruction = false;
+                pickupSawmillTarget = null;
+                StartCoroutine(WaitAndRetryRole(1f));
+                return;
+            }
+
             EnterWaitingForSawmillPlanks(sawmill);
             return;
         }
 
         if (!IsNearSawmillExit(sawmill, sawmillExitReachDistance))
         {
-            ResumeMovingToSawmillExit(sawmill);
+            ResumeMovingToSawmillExit(sawmill, deliverDirectlyToConstruction);
+            return;
+        }
+
+        if (deliverDirectlyToConstruction)
+        {
+            StartCoroutine(WaitAndRetryRole(1f));
             return;
         }
 
@@ -1102,22 +1135,37 @@ public class UnitAI : MonoBehaviour
         if (!sawmill.TryTakePickupPlank(this))
             return false;
 
+        bool deliverDirectlyToConstruction = directSawmillPickupToConstruction;
+
         headingToSawmillPickup = false;
+        directSawmillPickupToConstruction = false;
         pickupSawmillTarget = null;
         StopMoving();
+
+        if (deliverDirectlyToConstruction)
+        {
+            Debug.Log("[Стройка] Забрал доску у лесопилки — несу сразу на стройку");
+            if (!ResumeDeliveryToConstruction(currentSite))
+                FindJob();
+            return true;
+        }
+
         Debug.Log("[Склад] Забрал доску у лесопилки");
         GoToStorage(storage);
         return true;
     }
 
-    void ResumeMovingToSawmillExit(Sawmill sawmill)
+    void ResumeMovingToSawmillExit(Sawmill sawmill, bool deliverDirectlyToConstruction = false)
     {
         pickupSawmillTarget = sawmill;
         headingToSawmillPickup = true;
+        directSawmillPickupToConstruction = deliverDirectlyToConstruction;
         currentState = UnitState.MovingToSite;
         targetPosition = sawmill.GetExitPosition();
         SetWalkAnimation();
-        Debug.Log("[Склад] Иду к выходу лесопилки за доской");
+        Debug.Log(deliverDirectlyToConstruction
+            ? "[Стройка] Иду к выходу лесопилки за доской для стройки"
+            : "[Склад] Иду к выходу лесопилки за доской");
     }
 
     public void WakeForSawmillPickup(Sawmill sawmill)
@@ -1154,6 +1202,7 @@ public class UnitAI : MonoBehaviour
         StopWandering();
         isFreeRoaming = false;
         headingToSawmillPickup = false;
+        directSawmillPickupToConstruction = false;
         pickupSawmillTarget = sawmill;
         StopMoving();
         currentState = UnitState.Idle;
@@ -1341,6 +1390,7 @@ public class UnitAI : MonoBehaviour
         StopMoving();
         ReleaseReservedEntryPoint();
         headingToSawmillPickup = false;
+        directSawmillPickupToConstruction = false;
         pickupSawmillTarget = null;
 
         if (pendingRestAfterWork || IsExhausted)
@@ -1415,6 +1465,7 @@ public class UnitAI : MonoBehaviour
 
         assignedWorkRole = WorkCoordinator.WorkRole.Unassigned;
         headingToSawmillPickup = false;
+        directSawmillPickupToConstruction = false;
         pickupSawmillTarget = null;
         currentSite = null;
         isFreeRoaming = true;
@@ -1561,6 +1612,43 @@ public class UnitAI : MonoBehaviour
             return true;
         }
 
+        // Если склад пустой, но у лесопилки уже лежат готовые доски,
+        // строительный курьер забирает доску напрямую с лесопилки и несёт её на стройку.
+        Sawmill pickupSawmill = FindObjectOfType<Sawmill>();
+        if (pickupSawmill != null && pickupSawmill.PlanksWaitingPickup > 0)
+        {
+            if (WorkCoordinator.ShouldCoordinate())
+            {
+                if (!WorkCoordinator.Instance.TryClaimDelivery(this))
+                {
+                    if (assignedWorkRole == WorkCoordinator.WorkRole.DeliverToConstruction)
+                    {
+                        StartCoroutine(WaitAndRetryRole(1f));
+                        return true;
+                    }
+
+                    EnterIdleNoAssignment();
+                    return true;
+                }
+
+                WorkCoordinator.Instance.CommitRole(this, WorkCoordinator.WorkRole.DeliverToConstruction);
+            }
+
+            currentSite = null;
+            foreach (ConstructionSite site in sites)
+            {
+                if (site.NeedsPlanks())
+                {
+                    currentSite = site;
+                    break;
+                }
+            }
+
+            GoToSawmillPickup(pickupSawmill, true, currentSite);
+            Debug.Log("[Стройка] На складе досок нет — забираю готовую доску с лесопилки");
+            return true;
+        }
+
         if (WorkCoordinator.ShouldCoordinate())
         {
             if (WorkCoordinator.Instance.IsActiveDeliveryCourier(this)
@@ -1670,15 +1758,25 @@ public class UnitAI : MonoBehaviour
         return true;
     }
 
-    void GoToSawmillPickup(Sawmill sawmill)
+    void GoToSawmillPickup(Sawmill sawmill, bool deliverDirectlyToConstruction = false, ConstructionSite siteHint = null)
     {
         if (sawmill == null || sawmill.PlanksWaitingPickup <= 0)
         {
+            if (deliverDirectlyToConstruction)
+            {
+                StartCoroutine(WaitAndRetryRole(1f));
+                return;
+            }
+
             EnterWaitingForSawmillPlanks(sawmill);
             return;
         }
 
         StopWaitingForSawmillPlanks();
+        directSawmillPickupToConstruction = deliverDirectlyToConstruction;
+
+        if (siteHint != null)
+            currentSite = siteHint;
 
         if (TryTakeSawmillPickupPlank(sawmill))
             return;
@@ -1686,13 +1784,17 @@ public class UnitAI : MonoBehaviour
         ReleaseReservedEntryPoint();
         pickupSawmillTarget = sawmill;
         headingToSawmillPickup = true;
+        directSawmillPickupToConstruction = deliverDirectlyToConstruction;
         currentState = UnitState.MovingToSite;
-        currentSite = null;
+        if (!deliverDirectlyToConstruction)
+            currentSite = null;
         targetEntryPoint = null;
         targetPosition = sawmill.GetExitPosition();
 
         SetWalkAnimation();
-        Debug.Log("[Склад] Иду к выходу лесопилки за доской");
+        Debug.Log(deliverDirectlyToConstruction
+            ? "[Стройка] Иду к выходу лесопилки за доской для стройки"
+            : "[Склад] Иду к выходу лесопилки за доской");
     }
 
     IEnumerator WaitAndRetryRole(float delay)
@@ -1826,8 +1928,31 @@ public class UnitAI : MonoBehaviour
             }
         }
 
-        // Если на складе нет досок - идём на лесопилку
+        // Если склад пустой, но на выходе лесопилки уже есть готовые доски,
+        // берём их напрямую для стройки, не гоняя через склад.
         Sawmill sawmill = FindObjectOfType<Sawmill>();
+        if (sawmill != null && sawmill.PlanksWaitingPickup > 0)
+        {
+            ConstructionSite targetSite = null;
+            foreach (ConstructionSite site in sites)
+            {
+                if (site.NeedsPlanks())
+                {
+                    targetSite = site;
+                    break;
+                }
+            }
+
+            if (targetSite != null)
+            {
+                currentSite = targetSite;
+                GoToSawmillPickup(sawmill, true, targetSite);
+                Debug.Log("На складе нет досок — беру готовую доску с лесопилки сразу на стройку");
+                return;
+            }
+        }
+
+        // Если на складе нет досок и готовых досок у выхода тоже нет - идём работать на лесопилку
         if (sawmill != null)
         {
             currentState = UnitState.MovingToSite;

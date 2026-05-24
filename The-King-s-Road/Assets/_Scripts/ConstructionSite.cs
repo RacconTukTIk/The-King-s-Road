@@ -31,13 +31,13 @@ public class ConstructionSite : Building
     private bool isProgressBarActive = false;
 
     [Header("Building Completion")]
-    [Tooltip("��� ������� �������� ������ (��������: 'Warehouse', 'Tavern')")]
-    public string finishedBuildingScriptName = "Tavern"; // ������ �� Tavern
+    [Tooltip("Имя скрипта готового здания (например: 'Warehouse', 'Tavern')")]
+    public string finishedBuildingScriptName = "Tavern"; // По умолчанию создаем Tavern
 
-    [Tooltip("��������� �� ����� ����� ����� ����������")]
+    [Tooltip("Сохранять ли точки входа после завершения строительства")]
     public bool keepEntryPoints = true;
 
-    [Tooltip("��������� �� ���������")]
+    [Tooltip("Сохранять ли коллайдер после завершения строительства")]
     public bool keepCollider = true;
 
     void Start()
@@ -147,7 +147,7 @@ public class ConstructionSite : Building
 
         if (!unit.HasPlank)
         {
-            Debug.LogWarning($"���� {unit.name} ������ �� ������� ��� �����!");
+            Debug.LogWarning($"Юнит {unit.name} пришел на стройку без доски!");
             usedEntryPoint?.Vacate();
             unit.FindJob();
             return;
@@ -155,7 +155,7 @@ public class ConstructionSite : Building
 
         if (isComplete)
         {
-            Debug.Log("������� ��� ���������");
+            Debug.Log("Стройка уже завершена");
             usedEntryPoint?.Vacate();
             unit.FindJob();
             return;
@@ -168,21 +168,21 @@ public class ConstructionSite : Building
     {
         if (unit == null || usedEntryPoint == null)
         {
-            Debug.LogError("DeliverPlankRoutine: unit ��� usedEntryPoint null");
+            Debug.LogError("DeliverPlankRoutine: unit или usedEntryPoint равен null");
             yield break;
         }
 
         if (!unit.HasPlank)
         {
-            Debug.LogError($"DeliverPlankRoutine: � ����� {unit.name} ��� ����� � ������ ��������!");
+            Debug.LogError($"DeliverPlankRoutine: у юнита {unit.name} нет доски в начале доставки!");
             usedEntryPoint?.Vacate();
             unit.FindJob();
             yield break;
         }
 
-        Debug.Log($"DeliverPlankRoutine: ���� {unit.name} ����� ����� �����. ����� ����: {unit.HasPlank}");
+        Debug.Log($"DeliverPlankRoutine: юнит {unit.name} доставляет доску. Есть доска: {unit.HasPlank}");
 
-        // ����������� ����� �����, ����� ��� �� "�������" ��-�� ������������ ����� �����.
+        // Снимаем доску с юнита сразу, чтобы она не дублировалась при последующей логике.
         unit.BeginWork();
         unit.SetHasPlank(false);
 
@@ -198,8 +198,8 @@ public class ConstructionSite : Building
 
         if (deliveredPlanks >= requiredPlanks)
         {
-            Debug.Log("������� ��� ���������, ����� �� �������");
-            // ���� ���� ����, ������� ����� ��������� � ���������� ����� ������� �����.
+            Debug.Log("Стройка уже завершена, доска не нужна");
+            // Если доска уже была взята, возвращаем ее юниту и отправляем искать другую задачу.
             unit.SetHasPlank(true);
             usedEntryPoint?.Vacate();
             unit.FindJob();
@@ -207,7 +207,7 @@ public class ConstructionSite : Building
         }
 
         deliveredPlanks++;
-        Debug.Log($"���������� �����: {deliveredPlanks}/{requiredPlanks} �� ����� {unit.name}");
+        Debug.Log($"Доставлено досок: {deliveredPlanks}/{requiredPlanks} от юнита {unit.name}");
 
         if (deliveredPlanks == 1)
         {
@@ -222,8 +222,8 @@ public class ConstructionSite : Building
             buildEffect.Play();
         }
 
-        // �������������� ������� ����� �� ���� ���������� ������� ����� ����� �����.
-        // ����� ��� ��������� ������������ ����� ����� �� ����� �������� � ������.
+        // Немного отодвигаем юнита от стройки после передачи доски.
+        // Это помогает избежать застревания возле точки входа.
         if (unit != null && usedEntryPoint != null)
         {
             Vector3 outward = (usedEntryPoint.transform.position - transform.position).normalized;
@@ -252,7 +252,7 @@ public class ConstructionSite : Building
 
         if (!completedNow && NeedsPlanks())
         {
-            Debug.Log($"���� {unit.name} ���� �� ��������� ������");
+            Debug.Log($"Юнит {unit.name} идет за следующей доской");
             unit.ContinueDeliveryWork();
         }
         else
@@ -275,21 +275,6 @@ public class ConstructionSite : Building
         yield return null;
     }
 
-#if false
-    private void __TRASH__(UnitAI unit) { if (false) { int __x = 0; Debug.Log(__x.ToString() + "�� ������ ��� �����, ��� ������ ������");
-                unit.FindJob();
-            }
-        }
-        else
-        {
-            Debug.Log($"���� {unit.name} ���� ����� ������");
-            if (WorkCoordinator.ShouldCoordinate())
-                WorkCoordinator.Instance.ReleaseDelivery(unit);
-
-            unit.FindJob();
-        }
-    }
-#endif
 
     private void ShowProgressBar()
     {
@@ -380,7 +365,7 @@ public class ConstructionSite : Building
             completeEffect.Play();
         }
 
-        Debug.Log("������ ���������!");
+        Debug.Log("Стройка завершена!");
         isProgressBarActive = false;
 
         
@@ -414,10 +399,10 @@ public class ConstructionSite : Building
         Destroy(progressBarParent.gameObject);
     }
 
-    // ����� ��� ������ ������������� ������� �� ��������������
+    // Замена объекта стройки на готовое функциональное здание.
     private void ReplaceWithFunctionalBuilding()
     {
-        // ������� ������� ��������-���, ���� �� ��� ����
+        // Удаляем прогресс-бар, если он еще существует.
         if (progressBarParent != null)
         {
             Destroy(progressBarParent.gameObject);
@@ -429,10 +414,10 @@ public class ConstructionSite : Building
 
         GameObject thisGameObject = gameObject;
 
-        // � runtime ������� ��������� ���������, ����� �� �������� ������� ��������.
+        // В runtime удаляем компонент стройки, чтобы не выполнять строительную логику дальше.
         Destroy(this);
 
-        // ��������� ����� ������ �� �����
+        // Ищем тип готового здания по имени.
         System.Type buildingType = System.Type.GetType(finishedBuildingScriptName);
 
         if (buildingType == null)
@@ -462,14 +447,14 @@ public class ConstructionSite : Building
 
             functionalBuilding.OnConstructionComplete();
 
-            Debug.Log($"������ ������������� � {finishedBuildingScriptName}");
+            Debug.Log($"Стройка преобразована в {finishedBuildingScriptName}");
         }
         else
         {
-            Debug.LogError($"������ {finishedBuildingScriptName} �� ������! ���������, ��� ��� �������� ���������.");
+            Debug.LogError($"Скрипт {finishedBuildingScriptName} не найден! Проверьте, что имя указано правильно.");
 
             var defaultBuilding = thisGameObject.AddComponent<FunctionalBuilding>();
-            defaultBuilding.buildingName = "������� ������";
+            defaultBuilding.buildingName = "Готовое здание";
 
             if (keepEntryPoints && entryPointsList != null)
             {

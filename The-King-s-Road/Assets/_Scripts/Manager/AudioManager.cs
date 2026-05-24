@@ -19,7 +19,7 @@ public class AudioManager : MonoBehaviour
     [Range(0f, 1f)]
     public float sfxVolume = 0.7f;
 
-    // Приватные ссылки на AudioSource (будут созданы автоматически)
+    // РџСЂРёРІР°С‚РЅС‹Рµ СЃСЃС‹Р»РєРё РЅР° AudioSource. РљРѕРјРїРѕРЅРµРЅС‚С‹ СЃРѕР·РґР°СЋС‚СЃСЏ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё.
     private AudioSource musicSource;
     private AudioSource sfxSource;
 
@@ -32,7 +32,7 @@ public class AudioManager : MonoBehaviour
         {
             Instance = this;
             DontDestroyOnLoad(gameObject);
-            CreateAudioSources(); // Создаем AudioSource
+            CreateAudioSources();
             InitializeAudio();
         }
         else
@@ -43,32 +43,32 @@ public class AudioManager : MonoBehaviour
 
     private void CreateAudioSources()
     {
-        Debug.Log("Создаю AudioSource компоненты...");
+        Debug.Log("РЎРѕР·РґР°СЋ AudioSource РєРѕРјРїРѕРЅРµРЅС‚С‹...");
 
-        // Создаем Music Source
+        // РЎРѕР·РґР°РµРј Music Source.
         musicSource = gameObject.AddComponent<AudioSource>();
         musicSource.name = "MusicSource";
         musicSource.playOnAwake = false;
         musicSource.loop = true;
         musicSource.volume = musicVolume;
 
-        // Создаем SFX Source
+        // РЎРѕР·РґР°РµРј SFX Source.
         sfxSource = gameObject.AddComponent<AudioSource>();
         sfxSource.name = "SfxSource";
         sfxSource.playOnAwake = false;
         sfxSource.loop = false;
         sfxSource.volume = sfxVolume;
 
-        Debug.Log($"AudioSource созданы: Music={musicSource}, SFX={sfxSource}");
+        Debug.Log($"AudioSource СЃРѕР·РґР°РЅС‹: Music={musicSource}, SFX={sfxSource}");
     }
 
     private void InitializeAudio()
     {
-        // Настройка аудио клипов
+        // РќР°СЃС‚СЂРѕР№РєР° Р°СѓРґРёРѕРєР»РёРїРѕРІ.
         if (buttonClickSound == null)
         {
-            Debug.LogWarning("ButtonClickSound не назначен! Создаю тестовый...");
-            buttonClickSound = CreateTestSound(800, 0.1f); // Тестовый звук
+            Debug.LogWarning("ButtonClickSound РЅРµ РЅР°Р·РЅР°С‡РµРЅ! РЎРѕР·РґР°СЋ С‚РµСЃС‚РѕРІС‹Р№ Р·РІСѓРє...");
+            buttonClickSound = CreateTestSound(800, 0.1f);
         }
 
         if (constructionSound == null)
@@ -88,9 +88,9 @@ public class AudioManager : MonoBehaviour
         soundDictionary["construction"] = constructionSound;
         soundDictionary["complete"] = completeSound;
 
-        Debug.Log($"Аудио менеджер инициализирован. Звуков: {soundDictionary.Count}");
+        Debug.Log($"РђСѓРґРёРѕ РјРµРЅРµРґР¶РµСЂ РёРЅРёС†РёР°Р»РёР·РёСЂРѕРІР°РЅ. Р—РІСѓРєРѕРІ: {soundDictionary.Count}");
 
-        // Тестовое воспроизведение через 1 секунду
+        // РўРµСЃС‚РѕРІРѕРµ РІРѕСЃРїСЂРѕРёР·РІРµРґРµРЅРёРµ С‡РµСЂРµР· 1 СЃРµРєСѓРЅРґСѓ.
         StartCoroutine(TestPlayback());
     }
 
@@ -102,7 +102,7 @@ public class AudioManager : MonoBehaviour
 
         for (int i = 0; i < sampleCount; i++)
         {
-            // Затухающий синус
+            // Р—Р°С‚СѓС…Р°СЋС‰РёР№ СЃРёРЅСѓСЃ.
             float amplitude = Mathf.Exp(-i / (sampleRate * 0.05f));
             samples[i] = Mathf.Sin(2 * Mathf.PI * frequency * i / sampleRate) * amplitude * 0.3f;
         }
@@ -116,16 +116,16 @@ public class AudioManager : MonoBehaviour
     {
         yield return new WaitForSeconds(1f);
 
-        // Тестируем звук
-        Debug.Log("Тест: воспроизвожу button_click...");
+        // РўРµСЃС‚РёСЂСѓРµРј Р·РІСѓРє.
+        Debug.Log("РўРµСЃС‚: РІРѕСЃРїСЂРѕРёР·РІРѕР¶Сѓ button_click...");
         PlaySFX("button_click", 0.5f);
 
-        // Если есть музыка - запускаем
+        // Р•СЃР»Рё РµСЃС‚СЊ РјСѓР·С‹РєР° вЂ” Р·Р°РїСѓСЃРєР°РµРј.
         if (mainMenuMusic != null)
         {
             yield return new WaitForSeconds(0.5f);
             PlayMusic("main_menu_music");
-            Debug.Log("Музыка запущена");
+            Debug.Log("РњСѓР·С‹РєР° Р·Р°РїСѓС‰РµРЅР°");
         }
     }
 
@@ -135,11 +135,11 @@ public class AudioManager : MonoBehaviour
         {
             musicSource.clip = soundDictionary[clipName];
             musicSource.Play();
-            Debug.Log($"Запущена музыка: {clipName}");
+            Debug.Log($"Р—Р°РїСѓС‰РµРЅР° РјСѓР·С‹РєР°: {clipName}");
         }
         else
         {
-            Debug.LogWarning($"Музыка '{clipName}' не найдена или равна null");
+            Debug.LogWarning($"РњСѓР·С‹РєР° '{clipName}' РЅРµ РЅР°Р№РґРµРЅР° РёР»Рё СЂР°РІРЅР° null");
         }
     }
 
@@ -153,11 +153,11 @@ public class AudioManager : MonoBehaviour
         if (soundDictionary.ContainsKey(clipName) && soundDictionary[clipName] != null)
         {
             sfxSource.PlayOneShot(soundDictionary[clipName], sfxVolume * volumeScale);
-            Debug.Log($"Воспроизведение SFX: {clipName}, громкость: {sfxVolume * volumeScale}");
+            Debug.Log($"Р’РѕСЃРїСЂРѕРёР·РІРµРґРµРЅРёРµ SFX: {clipName}, РіСЂРѕРјРєРѕСЃС‚СЊ: {sfxVolume * volumeScale}");
         }
         else
         {
-            Debug.LogWarning($"SFX '{clipName}' не найден или равен null");
+            Debug.LogWarning($"SFX '{clipName}' РЅРµ РЅР°Р№РґРµРЅ РёР»Рё СЂР°РІРµРЅ null");
         }
     }
 

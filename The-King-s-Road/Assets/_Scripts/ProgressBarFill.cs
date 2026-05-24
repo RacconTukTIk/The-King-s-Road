@@ -4,7 +4,7 @@ using System.Collections;
 public class ProgressBarFill : MonoBehaviour
 {
     [Header("Fill Settings")]
-    public SpriteRenderer fillRenderer; // Рендерер для заполнения
+    public SpriteRenderer fillRenderer; // Р РµРЅРґРµСЂРµСЂ Р·Р°РїРѕР»РЅРµРЅРёСЏ.
     public Color startColor = Color.red;
     public Color endColor = Color.green;
     public AnimationCurve fillCurve = AnimationCurve.Linear(0, 0, 1, 1);
@@ -16,7 +16,7 @@ public class ProgressBarFill : MonoBehaviour
     {
         if (fillRenderer != null)
         {
-            // Создаем материал для заполнения
+            // РЎРѕР·РґР°РµРј РјР°С‚РµСЂРёР°Р» РґР»СЏ Р·Р°РїРѕР»РЅРµРЅРёСЏ.
             fillMaterial = fillRenderer.material;
             UpdateFillVisual();
         }
@@ -32,18 +32,18 @@ public class ProgressBarFill : MonoBehaviour
     {
         if (fillMaterial == null) return;
 
-        // Устанавливаем уровень заполнения через шейдер (если используется кастомный шейдер)
+        // РЈСЃС‚Р°РЅР°РІР»РёРІР°РµРј СѓСЂРѕРІРµРЅСЊ Р·Р°РїРѕР»РЅРµРЅРёСЏ С‡РµСЂРµР· С€РµР№РґРµСЂ, РµСЃР»Рё РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ РєР°СЃС‚РѕРјРЅС‹Р№ С€РµР№РґРµСЂ.
         fillMaterial.SetFloat("_FillAmount", currentProgress);
 
-        // Или изменяем scale для простого заполнения
+        // Р›РёР±Рѕ РёР·РјРµРЅСЏРµРј scale РґР»СЏ РїСЂРѕСЃС‚РѕРіРѕ РІРёР·СѓР°Р»СЊРЅРѕРіРѕ Р·Р°РїРѕР»РЅРµРЅРёСЏ.
         float curvedProgress = fillCurve.Evaluate(currentProgress);
         fillRenderer.transform.localScale = new Vector3(curvedProgress, 1f, 1f);
 
-        // Изменяем цвет
+        // РњРµРЅСЏРµРј С†РІРµС‚ Р·Р°РїРѕР»РЅРµРЅРёСЏ.
         fillRenderer.color = Color.Lerp(startColor, endColor, currentProgress);
     }
 
-    // Анимация заполнения
+    // РђРЅРёРјР°С†РёСЏ Р·Р°РїРѕР»РЅРµРЅРёСЏ.
     public IEnumerator AnimateFill(float targetProgress, float duration)
     {
         float startProgress = currentProgress;

@@ -29,7 +29,7 @@ public class TownHallScript : MonoBehaviour
         {
             Vector3 spawnPosition = (spawnPoint != null) ? spawnPoint.position : transform.position;
             Instantiate(unitPrefab, spawnPosition, Quaternion.identity);
-            Debug.Log("��������� ������!");
+            Debug.Log("Создан новый юнит!");
             count--;
         }
     }

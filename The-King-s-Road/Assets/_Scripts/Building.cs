@@ -17,23 +17,23 @@ public abstract class Building : MonoBehaviour
 
     protected virtual void Start()
     {
-        //        
+        // РРЅРёС†РёР°Р»РёР·РёСЂСѓРµРј С‚РѕС‡РєРё РІС…РѕРґР°, РµСЃР»Рё РѕРЅРё РЅРµ Р·Р°РґР°РЅС‹ РІ РёРЅСЃРїРµРєС‚РѕСЂРµ.
         if (entryPoints == null || entryPoints.Count == 0)
         {
             entryPoints = new List<EntryPoint>(GetComponentsInChildren<EntryPoint>());
         }
 
-        //      (   null)
+        // РџСЂРёРІСЏР·С‹РІР°РµРј С‚РѕС‡РєРё РІС…РѕРґР° Рє СЌС‚РѕРјСѓ Р·РґР°РЅРёСЋ, РїСЂРѕРїСѓСЃРєР°СЏ null-РѕР±СЉРµРєС‚С‹.
         foreach (var point in entryPoints)
         {
-            if (point != null)  // <-- :   null
+            if (point != null)
             {
                 point.parentBuilding = this;
             }
         }
     }
 
-    //     
+    // Р’РѕР·РІСЂР°С‰Р°РµС‚ Р±Р»РёР¶Р°Р№С€СѓСЋ СЃРІРѕР±РѕРґРЅСѓСЋ С‚РѕС‡РєСѓ РІС…РѕРґР°.
     public virtual EntryPoint GetNearestFreeEntryPoint(Vector3 unitPosition)
     {
         if (entryPoints == null || entryPoints.Count == 0)
@@ -44,7 +44,7 @@ public abstract class Building : MonoBehaviour
 
         foreach (var point in entryPoints)
         {
-            if (point != null && !point.isOccupied)  // <--   null
+            if (point != null && !point.isOccupied)
             {
                 float distance = Vector3.Distance(unitPosition, point.transform.position);
                 if (distance < minDistance)
@@ -58,7 +58,7 @@ public abstract class Building : MonoBehaviour
         return nearest;
     }
 
-    //   
+    // РћСЃРІРѕР±РѕР¶РґР°РµС‚ С‚РѕС‡РєСѓ РІС…РѕРґР°.
     public void VacateEntryPoint(EntryPoint point)
     {
         if (point != null)
@@ -67,7 +67,7 @@ public abstract class Building : MonoBehaviour
         }
     }
 
-    //    
+    // РњРµС‚РѕРґ РІР·Р°РёРјРѕРґРµР№СЃС‚РІРёСЏ СЋРЅРёС‚Р° СЃРѕ Р·РґР°РЅРёРµРј.
     public abstract void Interact(UnitAI unit, EntryPoint usedEntryPoint);
 
     public virtual void RefreshEntryPoints()
@@ -87,7 +87,8 @@ public abstract class Building : MonoBehaviour
     }
 
     /// <summary>
-    /// Пропуск только этого юнита сквозь коллайдеры здания (коллайдер здания остаётся для остальных).
+    /// Р Р°Р·СЂРµС€Р°РµС‚ РєРѕРЅРєСЂРµС‚РЅРѕРјСѓ СЋРЅРёС‚Сѓ РїСЂРѕС…РѕРґРёС‚СЊ СЃРєРІРѕР·СЊ РєРѕР»Р»Р°Р№РґРµСЂС‹ Р·РґР°РЅРёСЏ.
+    /// РљРѕР»Р»Р°Р№РґРµСЂС‹ Р·РґР°РЅРёСЏ РѕСЃС‚Р°СЋС‚СЃСЏ Р°РєС‚РёРІРЅС‹РјРё РґР»СЏ РѕСЃС‚Р°Р»СЊРЅС‹С… РѕР±СЉРµРєС‚РѕРІ.
     /// </summary>
     public void SetCollisionIgnoredForUnit(Collider2D unitCollider, bool ignore)
     {

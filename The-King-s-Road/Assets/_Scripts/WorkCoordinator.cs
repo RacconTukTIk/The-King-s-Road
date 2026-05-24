@@ -367,13 +367,18 @@ public class WorkCoordinator : MonoBehaviour
         bool storageHasPlanks = storage != null && storage.planks > 0;
         int pickupWaiting = sawmill != null ? sawmill.PlanksWaitingPickup : 0;
 
-        // Сначала забираем готовые доски с выхода лесопилки.
-        if (pickupWaiting > 0 && storageNotFull)
-            roles.Add(WorkRole.SawmillToStorage);
-
-        // Курьер на стройку — только если на складе уже есть доски.
-        if (constructionNeeds && storageHasPlanks)
+        // Курьер на стройку нужен, если доски есть на складе
+        // или если склад пустой, но готовая доска уже лежит у выхода лесопилки.
+        // Во втором случае UnitAI заберёт её напрямую с лесопилки и понесёт на стройку.
+        if (constructionNeeds && (storageHasPlanks || pickupWaiting > 0))
             roles.Add(WorkRole.DeliverToConstruction);
+
+        // Доски с выхода лесопилки на склад забираем только когда склад не полон.
+        // Если одновременно нужна стройка, отдельный складской курьер всё ещё полезен при 3+ юнитах,
+        // но строительный курьер теперь не ждёт склад и может брать доску напрямую.
+        if (pickupWaiting > 0 && storageNotFull
+            && (!constructionNeeds || storageHasPlanks || unitCount >= 3))
+            roles.Add(WorkRole.SawmillToStorage);
 
         // Пильщик пополняет склад, пока стройка активна и склад не полон (даже если там уже есть доски).
         if (sawmill != null && storageNotFull && constructionNeeds && unitCount >= 2)

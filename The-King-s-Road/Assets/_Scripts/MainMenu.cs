@@ -22,24 +22,24 @@ public class MainMenu : MonoBehaviour
 
     void Start()
     {
-        // Убеждаемся, что все элементы на месте
+        // РЈР±РµР¶РґР°РµРјСЃСЏ, С‡С‚Рѕ РІСЃРµ СЌР»РµРјРµРЅС‚С‹ РЅР° РјРµСЃС‚Рµ.
         if (playButtonImage == null || quitButtonImage == null)
         {
-            Debug.LogError("Не назначены кнопки в инспекторе!");
+            Debug.LogError("РќРµ РЅР°Р·РЅР°С‡РµРЅС‹ РєРЅРѕРїРєРё РІ РёРЅСЃРїРµРєС‚РѕСЂРµ!");
             return;
         }
 
-        // Устанавливаем начальные спрайты для кнопок
+        // РЈСЃС‚Р°РЅР°РІР»РёРІР°РµРј РЅР°С‡Р°Р»СЊРЅС‹Рµ СЃРїСЂР°Р№С‚С‹ РґР»СЏ РєРЅРѕРїРѕРє.
         playButtonImage.sprite = playButtonNormal;
         quitButtonImage.sprite = quitButtonNormal;
 
-        // Добавляем обработчики событий для кнопок
+        // Р”РѕР±Р°РІР»СЏРµРј РѕР±СЂР°Р±РѕС‚С‡РёРєРё СЃРѕР±С‹С‚РёР№ РґР»СЏ РєРЅРѕРїРѕРє.
         SetupButtonEvents();
 
-        // Запускаем фоновую музыку
+        // Р—Р°РїСѓСЃРєР°РµРј С„РѕРЅРѕРІСѓСЋ РјСѓР·С‹РєСѓ.
         PlayMenuMusic();
 
-        Debug.Log("Главное меню загружено");
+        Debug.Log("Р“Р»Р°РІРЅРѕРµ РјРµРЅСЋ Р·Р°РіСЂСѓР¶РµРЅРѕ");
     }
 
     void PlayMenuMusic()
@@ -52,25 +52,25 @@ public class MainMenu : MonoBehaviour
 
     void SetupButtonEvents()
     {
-        // ===== КНОПКА "ИГРАТЬ" =====
+        // ===== РљРќРћРџРљРђ "РР“Р РђРўР¬" =====
         EventTrigger playTrigger = playButtonImage.gameObject.GetComponent<EventTrigger>();
         if (playTrigger == null)
             playTrigger = playButtonImage.gameObject.AddComponent<EventTrigger>();
 
-        // Наведение на кнопку
+        // РќР°РІРµРґРµРЅРёРµ РЅР° РєРЅРѕРїРєСѓ.
         EventTrigger.Entry playEnter = new EventTrigger.Entry();
         playEnter.eventID = EventTriggerType.PointerEnter;
         playEnter.callback.AddListener((data) => {
             if (playButtonHover != null)
             {
                 playButtonImage.sprite = playButtonHover;
-                // Воспроизводим звук при наведении (опционально)
+                // Р’РѕСЃРїСЂРѕРёР·РІРѕРґРёРј Р·РІСѓРє РїСЂРё РЅР°РІРµРґРµРЅРёРё, РµСЃР»Рё РїРѕРЅР°РґРѕР±РёС‚СЃСЏ.
                 // AudioManager.Instance.PlaySFX("button_click", 0.3f);
             }
         });
         playTrigger.triggers.Add(playEnter);
 
-        // Уход с кнопки
+        // РЈС…РѕРґ СЃ РєРЅРѕРїРєРё.
         EventTrigger.Entry playExit = new EventTrigger.Entry();
         playExit.eventID = EventTriggerType.PointerExit;
         playExit.callback.AddListener((data) => {
@@ -81,18 +81,18 @@ public class MainMenu : MonoBehaviour
         });
         playTrigger.triggers.Add(playExit);
 
-        // Клик по кнопке
+        // РљР»РёРє РїРѕ РєРЅРѕРїРєРµ.
         EventTrigger.Entry playClick = new EventTrigger.Entry();
         playClick.eventID = EventTriggerType.PointerClick;
         playClick.callback.AddListener((data) => { OnPlayButtonClicked(); });
         playTrigger.triggers.Add(playClick);
 
-        // ===== КНОПКА "ВЫХОД" =====
+        // ===== РљРќРћРџРљРђ "Р’Р«РҐРћР”" =====
         EventTrigger quitTrigger = quitButtonImage.gameObject.GetComponent<EventTrigger>();
         if (quitTrigger == null)
             quitTrigger = quitButtonImage.gameObject.AddComponent<EventTrigger>();
 
-        // Наведение на кнопку
+        // РќР°РІРµРґРµРЅРёРµ РЅР° РєРЅРѕРїРєСѓ.
         EventTrigger.Entry quitEnter = new EventTrigger.Entry();
         quitEnter.eventID = EventTriggerType.PointerEnter;
         quitEnter.callback.AddListener((data) => {
@@ -103,7 +103,7 @@ public class MainMenu : MonoBehaviour
         });
         quitTrigger.triggers.Add(quitEnter);
 
-        // Уход с кнопки
+        // РЈС…РѕРґ СЃ РєРЅРѕРїРєРё.
         EventTrigger.Entry quitExit = new EventTrigger.Entry();
         quitExit.eventID = EventTriggerType.PointerExit;
         quitExit.callback.AddListener((data) => {
@@ -114,7 +114,7 @@ public class MainMenu : MonoBehaviour
         });
         quitTrigger.triggers.Add(quitExit);
 
-        // Клик по кнопке
+        // РљР»РёРє РїРѕ РєРЅРѕРїРєРµ.
         EventTrigger.Entry quitClick = new EventTrigger.Entry();
         quitClick.eventID = EventTriggerType.PointerClick;
         quitClick.callback.AddListener((data) => { OnQuitButtonClicked(); });
@@ -123,49 +123,49 @@ public class MainMenu : MonoBehaviour
 
     void OnPlayButtonClicked()
     {
-        Debug.Log("Нажата кнопка Играть - переход к игре");
+        Debug.Log("РќР°Р¶Р°С‚Р° РєРЅРѕРїРєР° РРіСЂР°С‚СЊ вЂ” РїРµСЂРµС…РѕРґ Рє РёРіСЂРµ");
 
-        // Воспроизводим звук клика
+        // Р’РѕСЃРїСЂРѕРёР·РІРѕРґРёРј Р·РІСѓРє РєР»РёРєР°.
         if (AudioManager.Instance != null)
         {
             AudioManager.Instance.PlaySFX("button_click");
         }
 
-        // Немедленная загрузка игровой сцены
+        // РќРµРјРµРґР»РµРЅРЅР°СЏ Р·Р°РіСЂСѓР·РєР° РёРіСЂРѕРІРѕР№ СЃС†РµРЅС‹.
         LoadGameScene();
     }
 
     void OnQuitButtonClicked()
     {
-        Debug.Log("Нажата кнопка Выход - закрытие игры");
+        Debug.Log("РќР°Р¶Р°С‚Р° РєРЅРѕРїРєР° Р’С‹С…РѕРґ вЂ” Р·Р°РєСЂС‹С‚РёРµ РёРіСЂС‹");
 
-        // Воспроизводим звук клика
+        // Р’РѕСЃРїСЂРѕРёР·РІРѕРґРёРј Р·РІСѓРє РєР»РёРєР°.
         if (AudioManager.Instance != null)
         {
             AudioManager.Instance.PlaySFX("button_click");
         }
 
-        // Немедленный выход из игры
+        // РќРµРјРµРґР»РµРЅРЅС‹Р№ РІС‹С…РѕРґ РёР· РёРіСЂС‹.
         QuitGame();
     }
 
     void LoadGameScene()
-    {   
-        //Остановка музыки при загрузке новой сцены
+    {
+        // РћСЃС‚Р°РЅРѕРІРєР° РјСѓР·С‹РєРё РїСЂРё Р·Р°РіСЂСѓР·РєРµ РЅРѕРІРѕР№ СЃС†РµРЅС‹.
         if (AudioManager.Instance != null)
         {
             AudioManager.Instance.StopMusic();
         }
 
-        // Проверяем существование сцены
+        // РџСЂРѕРІРµСЂСЏРµРј СЃСѓС‰РµСЃС‚РІРѕРІР°РЅРёРµ СЃС†РµРЅС‹.
         if (SceneExists(gameSceneName))
         {
             SceneManager.LoadScene(gameSceneName);
         }
         else
         {
-            Debug.LogError($"Сцена '{gameSceneName}' не найдена в Build Settings!");
-            // ... остальной код создания временной сцены
+            Debug.LogError($"РЎС†РµРЅР° '{gameSceneName}' РЅРµ РЅР°Р№РґРµРЅР° РІ Build Settings!");
+            // Р—РґРµСЃСЊ РјРѕР¶РЅРѕ РґРѕР±Р°РІРёС‚СЊ СЃРѕР·РґР°РЅРёРµ РІСЂРµРјРµРЅРЅРѕР№ СЃС†РµРЅС‹ РёР»Рё РїРѕРєР°Р·Р°С‚СЊ СЃРѕРѕР±С‰РµРЅРёРµ РёРіСЂРѕРєСѓ.
         }
     }
 
@@ -190,16 +190,16 @@ public class MainMenu : MonoBehaviour
 #endif
     }
 
-    // Обработка клавиатуры для удобства
+    // РћР±СЂР°Р±РѕС‚РєР° РєР»Р°РІРёР°С‚СѓСЂС‹ РґР»СЏ СѓРґРѕР±СЃС‚РІР°.
     void Update()
     {
-        // Enter или Пробел - начать игру
+        // Enter РёР»Рё РџСЂРѕР±РµР» вЂ” РЅР°С‡Р°С‚СЊ РёРіСЂСѓ.
         if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.Space))
         {
             OnPlayButtonClicked();
         }
 
-        // Escape - выход
+        // Escape вЂ” РІС‹С…РѕРґ.
         if (Input.GetKeyDown(KeyCode.Escape))
         {
             OnQuitButtonClicked();
